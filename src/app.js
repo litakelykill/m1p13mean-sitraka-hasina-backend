@@ -4,11 +4,12 @@ require('dotenv').config();
 
 const app = express();
 
-// Middlewares globaux
+// Middleware de parsing (intégré à Express)
+// Remplace les modules url et querystring du guide routing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configuration CORS
+// Middleware CORS
 const corsOptions = {
     origin: process.env.CORS_ORIGIN || 'http://localhost:4200',
     credentials: true,
@@ -16,34 +17,64 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Route de test
+// Middleware de logging personnalisé
+// Concept du guide : modification de l'objet req
+app.use((req, res, next) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${req.method} ${req.url}`);
+
+    // Ajout de propriété personnalisée (concept du guide middleware)
+    req.requestTime = Date.now();
+
+    // IMPORTANT : appel de next() pour passer au middleware suivant
+    next();
+});
+
+// 4. Middleware pour servir les fichiers statiques (uploads)
+app.use('/uploads', express.static('uploads'));
+
+// ROUTE DE TEST (Health Check)
 app.get('/', (req, res) => {
+    // Utilisation de la propriété ajoutée par le middleware
+    const responseTime = Date.now() - req.requestTime;
+
     res.json({
         success: true,
         message: 'API Centre Commercial - Backend MEAN M1-P13',
         version: '1.0.0',
-        authors: ['Sitraka', 'Hasina']
+        authors: ['Sitraka', 'Hasina'],
+        timestamp: new Date().toISOString(),
+        responseTime: `${responseTime}ms`
     });
 });
 
-// Routes API (à ajouter plus tard)
-// app.use('/api/auth', require('./routes/auth.routes'));
+// Importation et utilisation des routes définies dans ./routes/index.js
+app.use('/api', require('./routes'));
 
-// Gestion des erreurs 404
+// GESTION DES ERREURS
+// Middleware 404 - Route non trouvée
 app.use((req, res) => {
     res.status(404).json({
         success: false,
-        message: 'Route non trouvée'
+        message: `Route ${req.method} ${req.url} non trouvée`,
+        error: 'NOT_FOUND'
     });
 });
 
-// Gestion globale des erreurs
+// Middleware de gestion d'erreurs globales
+// IMPORTANT : 4 paramètres (err, req, res, next)
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({
+    console.error('='.repeat(50));
+    console.error('ERROR:', err.message);
+    console.error('Stack:', err.stack);
+    console.error('='.repeat(50));
+
+    res.status(err.status || 500).json({
         success: false,
-        message: 'Erreur serveur',
-        error: process.env.NODE_ENV === 'development' ? err.message : {}
+        message: err.message || 'Erreur serveur',
+        error: err.name || 'SERVER_ERROR',
+        // Stack trace uniquement en développement
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     });
 });
 

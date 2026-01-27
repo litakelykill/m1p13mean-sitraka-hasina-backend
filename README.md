@@ -11,13 +11,6 @@ Backend Express.js pour l'application de gestion de centre commercial.
 
 ## Architecture
 
-Ce projet suit les bonnes pratiques de Node.js et Express :
-
-- **Architecture modulaire** : Séparation claire des responsabilités
-- **Code non bloquant** : Utilisation systématique d'async/await
-- **Middlewares** : Système de middlewares Express pour la logique transversale
-- **Inversion de dépendances** : Modules faiblement couplés
-
 ### Structure
 
     src/

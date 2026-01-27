@@ -3,7 +3,7 @@
 Backend Express.js pour l'application de gestion de centre commercial.
 
 **Projet** : M1-P13 MEAN Stack  
-**Étudiants** : Nyangotiana & Soanomena  
+**Étudiants** : Sitraka & Hasina  
 **Date** : Janvier - Mars 2026
 
 ## Technologies

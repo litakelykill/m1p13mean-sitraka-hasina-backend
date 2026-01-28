@@ -164,8 +164,8 @@ const register = async (req, res) => {
                 siret: boutique.siret || '',
                 telephone: boutique.telephone || '',
                 email: boutique.email || email,
-                horaires: boutique.horaires || '',
-                adresse: boutique.adresse || {},
+                horaires: boutique.horaires || undefined,
+                reseauxSociaux: boutique.reseauxSociaux || undefined,
                 isValidated: false // Toujours false a l'inscription
             };
         }

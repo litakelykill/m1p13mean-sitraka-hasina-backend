@@ -2,7 +2,6 @@
  * Routes Index
  * 
  * Centralisation de toutes les routes API
- * Chaque module de routes est importe et monte sur son prefixe
  * 
  * @module routes/index
  */
@@ -13,24 +12,12 @@ const router = express.Router();
 // ============================================
 // IMPORT DES ROUTES MODULES
 // ============================================
-
-// Routes d'authentification
 const authRoutes = require('./auth.routes');
-
-// Routes admin
 const adminRoutes = require('./admin.routes');
-
-// Routes boutique (a implementer)
-// const boutiqueRoutes = require('./boutique.routes');
+const boutiqueRoutes = require('./boutique.routes');
 
 // Routes client (a implementer)
 // const clientRoutes = require('./client.routes');
-
-// Routes produits (a implementer)
-// const produitRoutes = require('./produit.routes');
-
-// Routes commandes (a implementer)
-// const commandeRoutes = require('./commande.routes');
 
 // ============================================
 // MONTAGE DES ROUTES
@@ -52,20 +39,16 @@ router.use('/admin', adminRoutes);
 /**
  * Routes boutique
  * Prefixe : /api/boutique
- * Acces : BOUTIQUE (validee) uniquement
+ * Acces : BOUTIQUE uniquement
  */
-// router.use('/boutique', boutiqueRoutes);
+router.use('/boutique', boutiqueRoutes);
 
 /**
  * Routes client
  * Prefixe : /api/client
- * Acces : CLIENT et ADMIN
+ * Acces : PUBLIC et CLIENT
  */
 // router.use('/client', clientRoutes);
-
-// ============================================
-// ROUTE DE DOCUMENTATION API
-// ============================================
 
 /**
  * @route   GET /api
@@ -76,20 +59,19 @@ router.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'API Centre Commercial - Documentation',
-    version: '1.1.0',
+    version: '1.2.0',
     endpoints: {
       auth: {
         description: 'Authentification et gestion utilisateurs',
         routes: [
-          { method: 'POST', path: '/api/auth/register', description: 'Inscription', access: 'Public' },
-          { method: 'POST', path: '/api/auth/login', description: 'Connexion', access: 'Public' },
-          { method: 'GET', path: '/api/auth/me', description: 'Profil utilisateur', access: 'Private' },
-          { method: 'PUT', path: '/api/auth/profile', description: 'Mise a jour profil', access: 'Private' },
-          { method: 'PUT', path: '/api/auth/password', description: 'Changement mot de passe', access: 'Private' },
-          { method: 'PUT', path: '/api/auth/avatar', description: 'Upload photo de profil', access: 'Private' },
-          { method: 'DELETE', path: '/api/auth/avatar', description: 'Supprimer photo de profil', access: 'Private' },
-          { method: 'PUT', path: '/api/auth/boutique', description: 'Mise a jour boutique', access: 'BOUTIQUE' },
-          { method: 'POST', path: '/api/auth/logout', description: 'Deconnexion', access: 'Private' }
+          { method: 'POST', path: '/api/auth/register', access: 'Public' },
+          { method: 'POST', path: '/api/auth/login', access: 'Public' },
+          { method: 'GET', path: '/api/auth/me', access: 'Private' },
+          { method: 'PUT', path: '/api/auth/profile', access: 'Private' },
+          { method: 'PUT', path: '/api/auth/password', access: 'Private' },
+          { method: 'PUT', path: '/api/auth/avatar', access: 'Private' },
+          { method: 'DELETE', path: '/api/auth/avatar', access: 'Private' },
+          { method: 'POST', path: '/api/auth/logout', access: 'Private' }
         ]
       },
       admin: {
@@ -101,28 +83,33 @@ router.get('/', (req, res) => {
           { method: 'GET', path: '/api/admin/boutiques/suspendues', description: 'Boutiques suspendues' },
           { method: 'GET', path: '/api/admin/boutiques/rejetees', description: 'Boutiques rejetees' },
           { method: 'GET', path: '/api/admin/boutiques/:id', description: 'Details boutique' },
-          { method: 'PUT', path: '/api/admin/boutiques/:id/valider', description: 'Valider une boutique' },
-          { method: 'PUT', path: '/api/admin/boutiques/:id/suspendre', description: 'Suspendre une boutique' },
-          { method: 'PUT', path: '/api/admin/boutiques/:id/reactiver', description: 'Reactiver une boutique' },
-          { method: 'PUT', path: '/api/admin/boutiques/:id/rejeter', description: 'Rejeter une boutique' },
-          { method: 'DELETE', path: '/api/admin/boutiques/:id', description: 'Supprimer une boutique' }
+          { method: 'PUT', path: '/api/admin/boutiques/:id/valider', description: 'Valider' },
+          { method: 'PUT', path: '/api/admin/boutiques/:id/suspendre', description: 'Suspendre' },
+          { method: 'PUT', path: '/api/admin/boutiques/:id/reactiver', description: 'Reactiver' },
+          { method: 'PUT', path: '/api/admin/boutiques/:id/rejeter', description: 'Rejeter' },
+          { method: 'DELETE', path: '/api/admin/boutiques/:id', description: 'Supprimer' }
         ]
       },
       boutique: {
-        description: 'Gestion boutique (BOUTIQUE only)',
-        status: 'A implementer',
+        description: 'Gestion profil boutique (BOUTIQUE only)',
         routes: [
-          { method: 'GET', path: '/api/boutique/dashboard', description: 'Dashboard boutique' },
-          { method: 'GET', path: '/api/boutique/produits', description: 'Mes produits' },
-          { method: 'POST', path: '/api/boutique/produits', description: 'Creer un produit' },
-          { method: 'GET', path: '/api/boutique/commandes', description: 'Commandes recues' }
+          { method: 'GET', path: '/api/boutique/profil', description: 'Profil complet' },
+          { method: 'GET', path: '/api/boutique/statut', description: 'Statut validation' },
+          { method: 'PUT', path: '/api/boutique/informations', description: 'Modifier infos' },
+          { method: 'PUT', path: '/api/boutique/contact', description: 'Modifier contact' },
+          { method: 'PUT', path: '/api/boutique/horaires', description: 'Modifier horaires' },
+          { method: 'PUT', path: '/api/boutique/reseaux-sociaux', description: 'Modifier reseaux' },
+          { method: 'PUT', path: '/api/boutique/logo', description: 'Upload logo' },
+          { method: 'DELETE', path: '/api/boutique/logo', description: 'Supprimer logo' },
+          { method: 'PUT', path: '/api/boutique/banniere', description: 'Upload banniere' },
+          { method: 'DELETE', path: '/api/boutique/banniere', description: 'Supprimer banniere' }
         ]
       },
       client: {
         description: 'Interface client',
         status: 'A implementer',
         routes: [
-          { method: 'GET', path: '/api/client/boutiques', description: 'Liste des boutiques' },
+          { method: 'GET', path: '/api/client/boutiques', description: 'Liste boutiques' },
           { method: 'GET', path: '/api/client/produits', description: 'Catalogue produits' },
           { method: 'GET', path: '/api/client/panier', description: 'Mon panier' },
           { method: 'POST', path: '/api/client/commandes', description: 'Passer commande' }
@@ -130,22 +117,12 @@ router.get('/', (req, res) => {
       }
     },
     documentation: {
-      authentication: 'Ajouter le header "Authorization: Bearer <token>" pour les routes protegees',
+      authentication: 'Header "Authorization: Bearer <token>"',
       roles: ['ADMIN', 'BOUTIQUE', 'CLIENT'],
-      pagination: {
-        description: 'Les routes de liste supportent la pagination',
-        params: {
-          page: 'Numero de page (default: 1)',
-          limit: 'Nombre par page (default: 10, max: 100)'
-        },
-        example: '/api/admin/boutiques/en-attente?page=1&limit=10'
-      },
-      responseFormat: {
-        success: 'boolean - Indique si la requete a reussi',
-        message: 'string - Message descriptif',
-        data: 'object - Donnees de la reponse (si succes)',
-        error: 'string - Code d\'erreur (si echec)',
-        errors: 'array - Details des erreurs de validation (si applicable)'
+      uploads: {
+        avatar: { endpoint: 'PUT /api/auth/avatar', maxSize: '2 MB' },
+        logo: { endpoint: 'PUT /api/boutique/logo', maxSize: '2 MB' },
+        banniere: { endpoint: 'PUT /api/boutique/banniere', maxSize: '5 MB' }
       }
     }
   });

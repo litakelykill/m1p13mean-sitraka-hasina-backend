@@ -1,14 +1,10 @@
 /**
  * Multer Configuration
  * 
- * Configuration pour l'upload de fichiers (avatars)
- * Stockage : Local (./uploads/avatars/)
- * 
- * Pour migrer vers Cloudinary :
- * 1. Decommenter la section CLOUDINARY
- * 2. Commenter la section STOCKAGE LOCAL
- * 3. Installer : npm install cloudinary multer-storage-cloudinary
- * 4. Ajouter les variables d'environnement CLOUDINARY_*
+ * Configuration pour l'upload de fichiers :
+ * - Avatars utilisateurs (./uploads/avatars/)
+ * - Logos boutiques (./uploads/boutiques/logos/)
+ * - Bannieres boutiques (./uploads/boutiques/bannieres/)
  * 
  * @module config/multer
  */
@@ -18,174 +14,213 @@ const path = require('path');
 const fs = require('fs');
 
 // CONFIGURATION
-const UPLOAD_DIR = './uploads/avatars';
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 2 * 1024 * 1024; // 2 MB par defaut
+// Dossiers d'upload
+const UPLOAD_DIRS = {
+  avatars: './uploads/avatars',
+  logos: './uploads/boutiques/logos',
+  bannieres: './uploads/boutiques/bannieres'
+};
+
+const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 2 * 1024 * 1024; // 2 MB
+const MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5 MB pour les bannieres
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-// Creer le dossier uploads/avatars s'il n'existe pas
-if (!fs.existsSync(UPLOAD_DIR)) {
-    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
-
-// STOCKAGE LOCAL (Actif)
-const localStorage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, UPLOAD_DIR);
-    },
-    filename: function (req, file, cb) {
-        // Format : userId_timestamp.extension
-        const userId = req.user._id.toString();
-        const timestamp = Date.now();
-        const ext = path.extname(file.originalname).toLowerCase();
-        const filename = `${userId}_${timestamp}${ext}`;
-        cb(null, filename);
-    }
+// Creer les dossiers s'ils n'existent pas
+Object.values(UPLOAD_DIRS).forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 });
-// STOCKAGE LOCAL (Actif)
+
+/**
+ * @desc Configuration de stockage Multer pour les avatars utilisateurs
+ * @type {multer.StorageEngine}
+ */
+const avatarStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, UPLOAD_DIRS.avatars);
+  },
+  filename: function (req, file, cb) {
+    const userId = req.user._id.toString();
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${userId}_${timestamp}${ext}`);
+  }
+});
+
+// STOCKAGE LOGO BOUTIQUE
+const logoStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, UPLOAD_DIRS.logos);
+  },
+  filename: function (req, file, cb) {
+    const odId = req.user._id.toString();
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `logo_${odId}_${timestamp}${ext}`);
+  }
+});
+
+// STOCKAGE BANNIERE BOUTIQUE
+const banniereStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, UPLOAD_DIRS.bannieres);
+  },
+  filename: function (req, file, cb) {
+    const odId = req.user._id.toString();
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `banniere_${odId}_${timestamp}${ext}`);
+  }
+});
+
+/**
+ * @desc Filtre pour n'accepter que les images de types autorisés
+ * @param {Object} req - Requête Express
+ * @param {Object} file - Fichier uploadé
+ * @param {Function} cb - Callback
+ */
+const imageFilter = (req, file, cb) => {
+  if (ALLOWED_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    const error = new Error('Type de fichier non autorise. Types acceptes : JPEG, JPG, PNG, WEBP');
+    error.code = 'INVALID_FILE_TYPE';
+    cb(error, false);
+  }
+};
+
+// CONFIGURATIONS MULTER
+const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: imageFilter
+});
+
+const uploadLogo = multer({
+  storage: logoStorage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: imageFilter
+});
+
+const uploadBanniere = multer({
+  storage: banniereStorage,
+  limits: { fileSize: MAX_BANNER_SIZE },
+  fileFilter: imageFilter
+});
+
+/**
+ * @desc Supprime un fichier local
+ * @param {string} filePath - Chemin du fichier à supprimer
+ * @returns {Promise<boolean>} - Résout à true si supprimé ou inexistant, rejette en cas d'erreur
+ */
+const deleteLocalFile = (filePath) => {
+  return new Promise((resolve, reject) => {
+    const fullPath = filePath.startsWith('./') ? filePath : `./${filePath}`;
+    
+    fs.unlink(fullPath, (err) => {
+      if (err) {
+        if (err.code === 'ENOENT') {
+          resolve(true);
+        } else {
+          reject(err);
+        }
+      } else {
+        resolve(true);
+      }
+    });
+  });
+};
+
+/**
+ * @desc Construit l'URL complete d'un fichier uploadé (avatar, logo, banniere) - HELPER
+ * @param {string} filename - Nom du fichier
+ * @param {string} type - Type de fichier ('avatar', 'logo', 'banniere')
+ */
+const buildFileUrl = (filename, type, req) => {
+  if (!filename) return null;
+  
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  
+  switch (type) {
+    case 'avatar':
+      return `${baseUrl}/uploads/avatars/${filename}`;
+    case 'logo':
+      return `${baseUrl}/uploads/boutiques/logos/${filename}`;
+    case 'banniere':
+      return `${baseUrl}/uploads/boutiques/bannieres/${filename}`;
+    default:
+      return null;
+  }
+};
 
 // ============================================
 // CLOUDINARY (Commente - Pour migration future)
 // ============================================
 /*
-// 1. Installer les dependances :
-// npm install cloudinary multer-storage-cloudinary
-
-// 2. Ajouter dans .env :
-// CLOUDINARY_CLOUD_NAME=votre_cloud_name
-// CLOUDINARY_API_KEY=votre_api_key
-// CLOUDINARY_API_SECRET=votre_api_secret
-
-// 3. Decommenter ce code :
-
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// Configuration Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Stockage Cloudinary
-const cloudinaryStorage = new CloudinaryStorage({
+const cloudinaryAvatarStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'centre-commercial/avatars', // Dossier sur Cloudinary
+    folder: 'centre-commercial/avatars',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [
-      { width: 300, height: 300, crop: 'fill', gravity: 'face' } // Redimensionner et centrer sur visage
-    ],
-    public_id: (req, file) => {
-      const userId = req.user._id.toString();
-      const timestamp = Date.now();
-      return `avatar_${userId}_${timestamp}`;
-    }
+    transformation: [{ width: 300, height: 300, crop: 'fill', gravity: 'face' }],
+    public_id: (req, file) => `avatar_${req.user._id}_${Date.now()}`
   }
 });
 
-// Pour utiliser Cloudinary, remplacer localStorage par cloudinaryStorage dans multer()
-// const upload = multer({ storage: cloudinaryStorage, ... });
+const cloudinaryLogoStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'centre-commercial/boutiques/logos',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 400, height: 400, crop: 'fill' }],
+    public_id: (req, file) => `logo_${req.user._id}_${Date.now()}`
+  }
+});
 
-// Fonction pour supprimer une image de Cloudinary
+const cloudinaryBanniereStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'centre-commercial/boutiques/bannieres',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 1200, height: 400, crop: 'fill' }],
+    public_id: (req, file) => `banniere_${req.user._id}_${Date.now()}`
+  }
+});
+
 const deleteFromCloudinary = async (publicId) => {
   try {
-    const result = await cloudinary.uploader.destroy(publicId);
-    return result;
+    return await cloudinary.uploader.destroy(publicId);
   } catch (error) {
     console.error('Erreur suppression Cloudinary:', error);
     throw error;
   }
 };
-
-// Extraire le public_id depuis l'URL Cloudinary
-const getPublicIdFromUrl = (url) => {
-  // URL format: https://res.cloudinary.com/cloud_name/image/upload/v123456/folder/public_id.jpg
-  const parts = url.split('/');
-  const filename = parts[parts.length - 1];
-  const folder = parts[parts.length - 2];
-  const publicId = `${folder}/${filename.split('.')[0]}`;
-  return publicId;
-};
-
-module.exports = { upload, cloudinary, deleteFromCloudinary, getPublicIdFromUrl };
 */
 
-// ============================================
-// FILTRE DES FICHIERS
-// ============================================
-/**
- * @desc Filtre pour accepter uniquement les types d'images autorises
- * @param {Object} req - Requete Express
- * @param {Object} file - Fichier uploadé
- * @param {Function} cb - Callback
- */
-const fileFilter = (req, file, cb) => {
-    if (ALLOWED_TYPES.includes(file.mimetype)) {
-        cb(null, true);
-    } else {
-        const error = new Error('Type de fichier non autorise. Types acceptes : JPEG, JPG, PNG, WEBP');
-        error.code = 'INVALID_FILE_TYPE';
-        cb(error, false);
-    }
-};
-
-// Configuration de multer avec stockage local
-const upload = multer({
-    storage: localStorage, // Remplacer par cloudinaryStorage pour Cloudinary
-    limits: {
-        fileSize: MAX_FILE_SIZE
-    },
-    fileFilter: fileFilter
-});
-
-/**
- * @desc Supprimer un fichier local - HELPER
- * @param {string} filePath - Chemin du fichier à supprimer
- * @returns {Promise} - Résout si supprimé, rejette en cas d'erreur
- */
-const deleteLocalFile = (filePath) => {
-    return new Promise((resolve, reject) => {
-        // Construire le chemin complet si necessaire
-        const fullPath = filePath.startsWith('./') ? filePath : `./${filePath}`;
-
-        fs.unlink(fullPath, (err) => {
-            if (err) {
-                // Si le fichier n'existe pas, on considere que c'est OK
-                if (err.code === 'ENOENT') {
-                    resolve(true);
-                } else {
-                    reject(err);
-                }
-            } else {
-                resolve(true);
-            }
-        });
-    });
-};
-
-/**
- * @desc Generer l'URL complete d'un avatar stocke localement - HELPER
- * @param {string} filename - Nom du fichier avatar
- * @param {Object} req - Requete Express pour construire l'URL
- * @returns {string|null} - URL complete ou null si pas de filename
- */
-const getAvatarUrl = (filename, req) => {
-    if (!filename) return null;
-
-    // En local : construire l'URL complete
-    const protocol = req.protocol;
-    const host = req.get('host');
-    return `${protocol}://${host}/uploads/avatars/${filename}`;
-
-    // Pour Cloudinary : l'URL est deja complete dans file.path
-};
-
 module.exports = {
-    upload,
-    deleteLocalFile,
-    getAvatarUrl,
-    UPLOAD_DIR,
-    MAX_FILE_SIZE,
-    ALLOWED_TYPES
+  // Configurations upload
+  upload: uploadAvatar, // Alias pour compatibilite
+  uploadAvatar,
+  uploadLogo,
+  uploadBanniere,
+  
+  // Helpers
+  deleteLocalFile,
+  buildFileUrl,
+  
+  // Constants
+  UPLOAD_DIRS,
+  MAX_FILE_SIZE,
+  MAX_BANNER_SIZE,
+  ALLOWED_TYPES
 };

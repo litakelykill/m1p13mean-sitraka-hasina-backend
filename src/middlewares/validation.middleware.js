@@ -259,10 +259,6 @@ const validateUpdateBoutique = [
         .normalizeEmail()
         .trim(),
 
-    body('boutique.horaires')
-        .optional()
-        .trim(),
-
     body('boutique.adresse.rue').optional().trim(),
     body('boutique.adresse.ville').optional().trim(),
     body('boutique.adresse.codePostal').optional().trim(),

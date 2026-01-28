@@ -1,9 +1,9 @@
 /**
  * User Model
  * 
- * Modèle Mongoose pour la gestion des utilisateurs avec 3 rôles :
+ * Modele Mongoose pour la gestion des utilisateurs avec 3 roles :
  * - ADMIN : Administrateur du centre commercial
- * - BOUTIQUE : Gérant de boutique (nécessite validation admin)
+ * - BOUTIQUE : Gerant de boutique (necessite validation admin)
  * - CLIENT : Client du centre commercial
  * 
  * @module models/User
@@ -15,19 +15,52 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
 /**
- * @desc Sous-schéma Mongoose pour les données spécifiques aux boutiques
+ * @desc Sous-schema pour les liens des reseaux sociaux d'une boutique
+ */
+const reseauxSociauxSchema = new mongoose.Schema({
+    facebook: { type: String, trim: true, default: null },
+    instagram: { type: String, trim: true, default: null },
+    twitter: { type: String, trim: true, default: null },
+    linkedin: { type: String, trim: true, default: null },
+    tiktok: { type: String, trim: true, default: null },
+    youtube: { type: String, trim: true, default: null }
+}, { _id: false });
+
+/**
+ * @desc Sous-schema pour les horaires d'ouverture d'une boutique
+ * Structure attendue pour chaque jour:
+ * { ouverture: "HH:MM", fermeture: "HH:MM", ferme: boolean }
+ */
+const jourHoraireSchema = new mongoose.Schema({
+    ouverture: { type: String, default: null },
+    fermeture: { type: String, default: null },
+    ferme: { type: Boolean, default: false }
+}, { _id: false });
+
+const horairesSchema = new mongoose.Schema({
+    lundi: { type: jourHoraireSchema, default: () => ({}) },
+    mardi: { type: jourHoraireSchema, default: () => ({}) },
+    mercredi: { type: jourHoraireSchema, default: () => ({}) },
+    jeudi: { type: jourHoraireSchema, default: () => ({}) },
+    vendredi: { type: jourHoraireSchema, default: () => ({}) },
+    samedi: { type: jourHoraireSchema, default: () => ({}) },
+    dimanche: { type: jourHoraireSchema, default: () => ({ ferme: true }) }
+}, { _id: false });
+
+/**
+ * @desc Sous-schema pour les données spécifiques aux boutiques
  */
 const boutiqueSchema = new mongoose.Schema({
     nomBoutique: {
         type: String,
         required: [true, 'Le nom de la boutique est requis'],
         trim: true,
-        maxlength: [100, 'Le nom de la boutique ne peut pas dépasser 100 caractères']
+        maxlength: [100, 'Le nom de la boutique ne peut pas depasser 100 caracteres']
     },
     description: {
         type: String,
         trim: true,
-        maxlength: [1000, 'La description ne peut pas dépasser 1000 caractères']
+        maxlength: [2000, 'La description ne peut pas depasser 2000 caracteres']
     },
     logo: {
         type: String,
@@ -44,8 +77,9 @@ const boutiqueSchema = new mongoose.Schema({
     siret: {
         type: String,
         trim: true,
-        maxlength: [14, 'Le numéro SIRET doit contenir 14 caractères']
+        maxlength: [14, 'Le numero SIRET doit contenir 14 caracteres']
     },
+    // Contact
     telephone: {
         type: String,
         trim: true
@@ -55,15 +89,32 @@ const boutiqueSchema = new mongoose.Schema({
         trim: true,
         lowercase: true
     },
-    horaires: {
+    siteWeb: {
         type: String,
-        trim: true
+        trim: true,
+        default: null
     },
+    // Horaires d'ouverture
+    horaires: {
+        type: horairesSchema,
+        default: undefined
+    },
+    horairesTexte: {
+        type: String,
+        trim: true,
+        maxlength: [500, 'Les horaires ne peuvent pas depasser 500 caracteres']
+    },
+    // Reseaux sociaux
+    reseauxSociaux: {
+        type: reseauxSociauxSchema,
+        default: undefined
+    },
+    // Adresse
     adresse: {
         rue: { type: String, trim: true },
         ville: { type: String, trim: true },
         codePostal: { type: String, trim: true },
-        pays: { type: String, trim: true, default: 'France' }
+        pays: { type: String, trim: true, default: 'Madagascar' }
     },
     // Validation par l'admin
     isValidated: {
@@ -104,8 +155,8 @@ const userSchema = new mongoose.Schema({
     password: {
         type: String,
         required: [true, 'Le mot de passe est requis'],
-        minlength: [8, 'Le mot de passe doit contenir au moins 8 caractères'],
-        select: false // Ne pas retourner le password par défaut
+        minlength: [8, 'Le mot de passe doit contenir au moins 8 caracteres'],
+        select: false
     },
 
     // Informations personnelles
@@ -113,18 +164,18 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Le nom est requis'],
         trim: true,
-        maxlength: [50, 'Le nom ne peut pas dépasser 50 caractères']
+        maxlength: [50, 'Le nom ne peut pas depasser 50 caracteres']
     },
     prenom: {
         type: String,
-        required: [true, 'Le prénom est requis'],
+        required: [true, 'Le prenom est requis'],
         trim: true,
-        maxlength: [50, 'Le prénom ne peut pas dépasser 50 caractères']
+        maxlength: [50, 'Le prenom ne peut pas depasser 50 caracteres']
     },
     telephone: {
         type: String,
         trim: true,
-        maxlength: [20, 'Le numéro de téléphone ne peut pas dépasser 20 caractères']
+        maxlength: [20, 'Le numero de telephone ne peut pas depasser 20 caracteres']
     },
     adresse: {
         rue: { type: String, trim: true },
@@ -132,18 +183,20 @@ const userSchema = new mongoose.Schema({
         codePostal: { type: String, trim: true },
         pays: { type: String, trim: true, default: 'Madagascar' }
     },
+
+    // Photo de profil
     avatar: {
         type: String,
         default: null
         // Stocke le nom du fichier (local) ou l'URL complete (Cloudinary)
     },
 
-    // Rôle et statut
+    // Role et statut
     role: {
         type: String,
         enum: {
             values: ['ADMIN', 'BOUTIQUE', 'CLIENT'],
-            message: 'Le rôle doit être ADMIN, BOUTIQUE ou CLIENT'
+            message: 'Le role doit etre ADMIN, BOUTIQUE ou CLIENT'
         },
         default: 'CLIENT'
     },
@@ -152,7 +205,7 @@ const userSchema = new mongoose.Schema({
         default: true
     },
 
-    // Données spécifiques BOUTIQUE
+    // Donnees specifiques BOUTIQUE
     boutique: {
         type: boutiqueSchema,
         default: null
@@ -211,7 +264,7 @@ userSchema.pre('save', async function () {
     // ---- Validation données boutique ----
     // Si le rôle est BOUTIQUE, les données boutique sont requises
     if (this.role === 'BOUTIQUE' && !this.boutique) {
-        throw new Error('Les données de la boutique sont requises pour le rôle BOUTIQUE');
+        throw new Error('Les donnees de la boutique sont requises pour le role BOUTIQUE');
     }
 
     // Si le rôle est BOUTIQUE et nouvelle inscription, isValidated = false
@@ -316,30 +369,44 @@ userSchema.methods.toSafeObject = function () {
 };
 
 /**
- * @desc Retourne un objet utilisateur sans les données sensibles et avec l'URL complète de l'avatar
- * @param {Object} req - L'objet requête Express pour construire l'URL
+ * @desc Retourne un objet utilisateur avec URLs completes pour avatar, logo et banniere
+ * @param {Object} req - Requete Express pour construire les URLs
+ * @returns {Object} Objet utilisateur avec URLs completes
  */
-userSchema.methods.toSafeObjectWithAvatarUrl = function (req) {
+userSchema.methods.toSafeObjectWithUrls = function (req) {
     const userObject = this.toSafeObject();
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-    // Construire l'URL complete de l'avatar si existe
+    // URL avatar
     if (userObject.avatar) {
-        const protocol = req.protocol;
-        const host = req.get('host');
-        userObject.avatarUrl = `${protocol}://${host}/uploads/avatars/${userObject.avatar}`;
-
-        // Pour Cloudinary : l'avatar contient deja l'URL complete
-        // if (userObject.avatar.startsWith('http')) {
-        //   userObject.avatarUrl = userObject.avatar;
-        // }
+        userObject.avatarUrl = `${baseUrl}/uploads/avatars/${userObject.avatar}`;
     } else {
         userObject.avatarUrl = null;
+    }
+
+    // URLs boutique (logo et banniere)
+    if (userObject.boutique) {
+        if (userObject.boutique.logo) {
+            userObject.boutique.logoUrl = `${baseUrl}/uploads/boutiques/logos/${userObject.boutique.logo}`;
+        } else {
+            userObject.boutique.logoUrl = null;
+        }
+
+        if (userObject.boutique.banniere) {
+            userObject.boutique.banniereUrl = `${baseUrl}/uploads/boutiques/bannieres/${userObject.boutique.banniere}`;
+        } else {
+            userObject.boutique.banniereUrl = null;
+        }
     }
 
     return userObject;
 };
 
-// EXPORT DU MODÈLE
+// Alias pour compatibilite
+userSchema.methods.toSafeObjectWithAvatarUrl = function (req) {
+    return this.toSafeObjectWithUrls(req);
+};
+
 const User = mongoose.model('User', userSchema);
 
 module.exports = User;

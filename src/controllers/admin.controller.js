@@ -53,17 +53,23 @@ const ADMIN_ERRORS = {
     }
 };
 
-// ============================================
-// HELPER : Construire l'URL avatar
-// ============================================
+/**
+ * @desc Construire l'URL de l'avatar d'un utilisateur
+ * @param {Object} user - L'utilisateur
+ * @param {Object} req - Requete Express
+ * @returns {string|null} URL de l'avatar ou null si pas d'avatar
+ */
 const buildAvatarUrl = (user, req) => {
     if (!user.avatar) return null;
     return `${req.protocol}://${req.get('host')}/uploads/avatars/${user.avatar}`;
 };
 
-// ============================================
-// HELPER : Formater une boutique pour la reponse
-// ============================================
+/**
+ * @desc Formater une boutique pour la reponse
+ * @param {Object} user - L'utilisateur
+ * @param {Object} req - Requete Express
+ * @returns {Object} Boutique formatee
+ */
 const formatBoutiqueResponse = (user, req) => {
     const userObj = user.toObject ? user.toObject() : user;
 
@@ -79,9 +85,11 @@ const formatBoutiqueResponse = (user, req) => {
     return userObj;
 };
 
-// ============================================
-// HELPER : Pagination
-// ============================================
+/**
+ * @desc Extraire les parametres de pagination depuis la query
+ * @param {Object} query - Objet query de la requete
+ * @returns {Object} Parametres de pagination { page, limit, skip }
+ */
 const getPagination = (query) => {
     const page = parseInt(query.page) || 1;
     const limit = parseInt(query.limit) || 10;
@@ -90,9 +98,6 @@ const getPagination = (query) => {
     return { page, limit, skip };
 };
 
-// ============================================
-// CONTROLLER : Dashboard Stats
-// ============================================
 /**
  * @desc    Recuperer les statistiques globales du dashboard
  * @route   GET /api/admin/dashboard
@@ -177,9 +182,6 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
-// ============================================
-// CONTROLLER : Liste boutiques en attente
-// ============================================
 /**
  * @desc    Recuperer la liste des boutiques en attente de validation
  * @route   GET /api/admin/boutiques/en-attente
@@ -236,9 +238,6 @@ const getBoutiquesEnAttente = async (req, res) => {
     }
 };
 
-// ============================================
-// CONTROLLER : Liste boutiques validees
-// ============================================
 /**
  * @desc    Recuperer la liste des boutiques validees
  * @route   GET /api/admin/boutiques/validees
@@ -294,9 +293,6 @@ const getBoutiquesValidees = async (req, res) => {
     }
 };
 
-// ============================================
-// CONTROLLER : Liste boutiques suspendues
-// ============================================
 /**
  * @desc    Recuperer la liste des boutiques suspendues
  * @route   GET /api/admin/boutiques/suspendues
@@ -349,9 +345,6 @@ const getBoutiquesSuspendues = async (req, res) => {
     }
 };
 
-// ============================================
-// CONTROLLER : Liste boutiques rejetees
-// ============================================
 /**
  * @desc    Recuperer la liste des boutiques rejetees
  * @route   GET /api/admin/boutiques/rejetees
@@ -404,9 +397,6 @@ const getBoutiquesRejetees = async (req, res) => {
     }
 };
 
-// ============================================
-// CONTROLLER : Details d'une boutique
-// ============================================
 /**
  * @desc    Recuperer les details d'une boutique
  * @route   GET /api/admin/boutiques/:id
@@ -466,9 +456,6 @@ const getBoutiqueDetails = async (req, res) => {
     }
 };
 
-// ============================================
-// CONTROLLER : Valider une boutique
-// ============================================
 /**
  * @desc    Valider une boutique
  * @route   PUT /api/admin/boutiques/:id/valider
@@ -543,9 +530,6 @@ const validerBoutique = async (req, res) => {
     }
 };
 
-// ============================================
-// CONTROLLER : Suspendre une boutique
-// ============================================
 /**
  * @desc    Suspendre une boutique
  * @route   PUT /api/admin/boutiques/:id/suspendre
@@ -616,9 +600,6 @@ const suspendreBoutique = async (req, res) => {
     }
 };
 
-// ============================================
-// CONTROLLER : Reactiver une boutique
-// ============================================
 /**
  * @desc    Reactiver une boutique suspendue
  * @route   PUT /api/admin/boutiques/:id/reactiver
@@ -689,9 +670,6 @@ const reactiverBoutique = async (req, res) => {
     }
 };
 
-// ============================================
-// CONTROLLER : Rejeter une boutique
-// ============================================
 /**
  * @desc    Rejeter une demande de boutique avec raison
  * @route   PUT /api/admin/boutiques/:id/rejeter
@@ -764,9 +742,6 @@ const rejeterBoutique = async (req, res) => {
     }
 };
 
-// ============================================
-// CONTROLLER : Supprimer une boutique
-// ============================================
 /**
  * @desc    Supprimer une boutique
  * @route   DELETE /api/admin/boutiques/:id
@@ -835,9 +810,6 @@ const deleteBoutique = async (req, res) => {
     }
 };
 
-// ============================================
-// EXPORTS
-// ============================================
 module.exports = {
     getDashboardStats,
     getBoutiquesEnAttente,

@@ -8,9 +8,12 @@
 
 const { body, query, param, validationResult } = require('express-validator');
 
-// ============================================
-// HANDLER : Traitement des erreurs de validation
-// ============================================
+/**
+ * @desc HANDLER : Traitement des erreurs de validation
+ * @param {Object} req - Requete Express
+ * @param {Object} res - Reponse Express
+ * @param {Function} next - Fonction next d'Express
+ */
 const handleValidationErrors = (req, res, next) => {
     const errors = validationResult(req);
 
@@ -32,9 +35,9 @@ const handleValidationErrors = (req, res, next) => {
     next();
 };
 
-// ============================================
-// VALIDATION : Rejet de boutique
-// ============================================
+/**
+ * @desc VALIDATION : Rejet de boutique
+ */
 const validateRejet = [
     body('raison')
         .notEmpty().withMessage('La raison du rejet est requise.')
@@ -45,9 +48,9 @@ const validateRejet = [
     handleValidationErrors
 ];
 
-// ============================================
-// VALIDATION : Pagination
-// ============================================
+/**
+ * @desc VALIDATION : Parametres de pagination
+ */
 const validatePagination = [
     query('page')
         .optional()
@@ -62,9 +65,9 @@ const validatePagination = [
     handleValidationErrors
 ];
 
-// ============================================
-// VALIDATION : ID de boutique
-// ============================================
+/**
+ * @desc VALIDATION : ID de boutique
+ */
 const validateBoutiqueId = [
     param('id')
         .notEmpty().withMessage('L\'ID de la boutique est requis.')

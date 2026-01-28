@@ -158,7 +158,4 @@ router.put('/boutiques/:id/rejeter', validateBoutiqueId, validateRejet, rejeterB
  */
 router.delete('/boutiques/:id', validateBoutiqueId, deleteBoutique);
 
-// ============================================
-// EXPORT
-// ============================================
 module.exports = router;

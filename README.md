@@ -13,20 +13,29 @@ Backend Express.js pour l'application de gestion de centre commercial.
 
 ### Structure
 
-    src/
-    ├── app.js              # Configuration Express + Middlewares
-
-    ├── config/             # Configuration (DB, JWT)
-
-    ├── models/             # Modèles Mongoose
-
-    ├── routes/             # Routes Express (modulaires)
-
-    ├── controllers/        # Contrôleurs (logique métier)
-
-    ├── middlewares/        # Middlewares personnalisés
-
-    └── utils/              # Fonctions utilitaires
+```
+m1p13mean-sitraka-hasina-backend/
+├── server.js                    
+├── seed.js                      
+├── package.json
+├── .env
+└── src/
+    ├── app.js                   
+    ├── config/
+    │   └── database.js          
+    ├── models/
+    │   └── User.js              
+    ├── controllers/
+    │   └── auth.controller.js   
+    ├── middlewares/
+    │   ├── index.js             
+    │   ├── auth.middleware.js   
+    │   ├── role.middleware.js   
+    │   └── validation.middleware.js  
+    └── routes/
+        ├── index.js             
+        └── auth.routes.js       
+```
 
 ## Technologies
 

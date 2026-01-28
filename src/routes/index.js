@@ -17,8 +17,8 @@ const router = express.Router();
 // Routes d'authentification
 const authRoutes = require('./auth.routes');
 
-// Routes admin (a implementer)
-// const adminRoutes = require('./admin.routes');
+// Routes admin
+const adminRoutes = require('./admin.routes');
 
 // Routes boutique (a implementer)
 // const boutiqueRoutes = require('./boutique.routes');
@@ -39,17 +39,6 @@ const authRoutes = require('./auth.routes');
 /**
  * Routes d'authentification
  * Prefixe : /api/auth
- * 
- * Endpoints :
- * - POST /api/auth/register - Inscription
- * - POST /api/auth/login - Connexion
- * - GET /api/auth/me - Profil utilisateur
- * - PUT /api/auth/profile - Mise a jour profil
- * - PUT /api/auth/password - Changement mot de passe
- * - PUT /api/auth/avatar - Upload photo de profil
- * - DELETE /api/auth/avatar - Supprimer photo de profil
- * - PUT /api/auth/boutique - Mise a jour boutique
- * - POST /api/auth/logout - Deconnexion
  */
 router.use('/auth', authRoutes);
 
@@ -57,30 +46,13 @@ router.use('/auth', authRoutes);
  * Routes administration
  * Prefixe : /api/admin
  * Acces : ADMIN uniquement
- * 
- * A implementer :
- * - GET /api/admin/dashboard - Statistiques globales
- * - GET /api/admin/users - Liste des utilisateurs
- * - GET /api/admin/boutiques - Liste des boutiques
- * - PUT /api/admin/boutiques/:id/validate - Valider une boutique
- * - PUT /api/admin/boutiques/:id/reject - Rejeter une boutique
- * - PUT /api/admin/users/:id/status - Activer/Desactiver un utilisateur
  */
-// router.use('/admin', adminRoutes);
+router.use('/admin', adminRoutes);
 
 /**
  * Routes boutique
  * Prefixe : /api/boutique
  * Acces : BOUTIQUE (validee) uniquement
- * 
- * A implementer :
- * - GET /api/boutique/dashboard - Dashboard boutique
- * - GET /api/boutique/produits - Mes produits
- * - POST /api/boutique/produits - Creer un produit
- * - PUT /api/boutique/produits/:id - Modifier un produit
- * - DELETE /api/boutique/produits/:id - Supprimer un produit
- * - GET /api/boutique/commandes - Commandes recues
- * - PUT /api/boutique/commandes/:id/status - Modifier statut commande
  */
 // router.use('/boutique', boutiqueRoutes);
 
@@ -88,19 +60,6 @@ router.use('/auth', authRoutes);
  * Routes client
  * Prefixe : /api/client
  * Acces : CLIENT et ADMIN
- * 
- * A implementer :
- * - GET /api/client/boutiques - Liste des boutiques
- * - GET /api/client/boutiques/:id - Details d'une boutique
- * - GET /api/client/produits - Catalogue produits
- * - GET /api/client/produits/:id - Details d'un produit
- * - GET /api/client/panier - Mon panier
- * - POST /api/client/panier - Ajouter au panier
- * - PUT /api/client/panier/:id - Modifier quantite
- * - DELETE /api/client/panier/:id - Retirer du panier
- * - POST /api/client/commandes - Passer commande
- * - GET /api/client/commandes - Mes commandes
- * - GET /api/client/commandes/:id - Details d'une commande
  */
 // router.use('/client', clientRoutes);
 
@@ -117,7 +76,7 @@ router.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'API Centre Commercial - Documentation',
-    version: '1.0.0',
+    version: '1.1.0',
     endpoints: {
       auth: {
         description: 'Authentification et gestion utilisateurs',
@@ -135,14 +94,12 @@ router.get('/', (req, res) => {
       },
       admin: {
         description: 'Administration (ADMIN only)',
-        status: 'A implementer',
         routes: [
           { method: 'GET', path: '/api/admin/dashboard', description: 'Statistiques globales' },
-          { method: 'GET', path: '/api/admin/users', description: 'Liste des utilisateurs' },
-          { method: 'GET', path: '/api/admin/boutiques', description: 'Liste des boutiques' },
           { method: 'GET', path: '/api/admin/boutiques/en-attente', description: 'Boutiques en attente' },
           { method: 'GET', path: '/api/admin/boutiques/validees', description: 'Boutiques validees' },
           { method: 'GET', path: '/api/admin/boutiques/suspendues', description: 'Boutiques suspendues' },
+          { method: 'GET', path: '/api/admin/boutiques/rejetees', description: 'Boutiques rejetees' },
           { method: 'GET', path: '/api/admin/boutiques/:id', description: 'Details boutique' },
           { method: 'PUT', path: '/api/admin/boutiques/:id/valider', description: 'Valider une boutique' },
           { method: 'PUT', path: '/api/admin/boutiques/:id/suspendre', description: 'Suspendre une boutique' },
@@ -175,12 +132,13 @@ router.get('/', (req, res) => {
     documentation: {
       authentication: 'Ajouter le header "Authorization: Bearer <token>" pour les routes protegees',
       roles: ['ADMIN', 'BOUTIQUE', 'CLIENT'],
-      avatarUpload: {
-        endpoint: 'PUT /api/auth/avatar',
-        contentType: 'multipart/form-data',
-        fieldName: 'avatar',
-        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
-        maxSize: '2 MB'
+      pagination: {
+        description: 'Les routes de liste supportent la pagination',
+        params: {
+          page: 'Numero de page (default: 1)',
+          limit: 'Nombre par page (default: 10, max: 100)'
+        },
+        example: '/api/admin/boutiques/en-attente?page=1&limit=10'
       },
       responseFormat: {
         success: 'boolean - Indique si la requete a reussi',

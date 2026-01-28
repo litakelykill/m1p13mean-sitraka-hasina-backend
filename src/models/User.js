@@ -132,6 +132,11 @@ const userSchema = new mongoose.Schema({
         codePostal: { type: String, trim: true },
         pays: { type: String, trim: true, default: 'Madagascar' }
     },
+    avatar: {
+        type: String,
+        default: null
+        // Stocke le nom du fichier (local) ou l'URL complete (Cloudinary)
+    },
 
     // Rôle et statut
     role: {
@@ -306,6 +311,30 @@ userSchema.methods.toSafeObject = function () {
     delete userObject.resetPasswordToken;
     delete userObject.resetPasswordExpire;
     delete userObject.__v;
+
+    return userObject;
+};
+
+/**
+ * @desc Retourne un objet utilisateur sans les données sensibles et avec l'URL complète de l'avatar
+ * @param {Object} req - L'objet requête Express pour construire l'URL
+ */
+userSchema.methods.toSafeObjectWithAvatarUrl = function (req) {
+    const userObject = this.toSafeObject();
+
+    // Construire l'URL complete de l'avatar si existe
+    if (userObject.avatar) {
+        const protocol = req.protocol;
+        const host = req.get('host');
+        userObject.avatarUrl = `${protocol}://${host}/uploads/avatars/${userObject.avatar}`;
+
+        // Pour Cloudinary : l'avatar contient deja l'URL complete
+        // if (userObject.avatar.startsWith('http')) {
+        //   userObject.avatarUrl = userObject.avatar;
+        // }
+    } else {
+        userObject.avatarUrl = null;
+    }
 
     return userObject;
 };

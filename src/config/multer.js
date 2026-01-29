@@ -169,6 +169,8 @@ const buildFileUrl = (filename, type, req) => {
       return `${baseUrl}/uploads/boutiques/logos/${filename}`;
     case 'banniere':
       return `${baseUrl}/uploads/boutiques/bannieres/${filename}`;
+    case 'produit':
+      return `${baseUrl}/uploads/produits/${filename}`;
     default:
       return null;
   }

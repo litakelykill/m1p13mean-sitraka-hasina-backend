@@ -69,7 +69,6 @@ const categorieSchema = new mongoose.Schema({
 /**
  * @desc Index pour optimiser les recherches
  */
-categorieSchema.index({ slug: 1 });
 categorieSchema.index({ ordre: 1, nom: 1 });
 categorieSchema.index({ isActive: 1 });
 

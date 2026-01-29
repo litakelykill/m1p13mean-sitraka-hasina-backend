@@ -20,6 +20,7 @@ const {
     updateStock,
     updatePromo,
     uploadImagePrincipale,
+    deleteImagePrincipale,
     addImage,
     deleteImage,
     getStats
@@ -132,6 +133,13 @@ router.put('/:id/promo', validateProduitId, validatePromo, updatePromo);
  * @access  Private (BOUTIQUE)
  */
 router.put('/:id/image', validateProduitId, uploadProduit.single('image'), uploadImagePrincipale);
+
+/**
+ * @route   DELETE /api/boutique/produits/:id/image
+ * @desc    Supprimer image principale
+ * @access  Private (BOUTIQUE)
+ */
+router.delete('/:id/image', validateProduitId, deleteImagePrincipale);
 
 /**
  * @route   POST /api/boutique/produits/:id/images

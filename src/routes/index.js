@@ -66,6 +66,45 @@ router.use('/boutique/produits', produitRoutes);
  */
 // router.use('/client', clientRoutes);
 
+// ============================================
+// ROUTE DE CONFIGURATION (pour frontend)
+// ============================================
+router.get('/config', (req, res) => {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  
+  res.status(200).json({
+    success: true,
+    data: {
+      api: {
+        baseUrl: baseUrl,
+        version: '1.2.0'
+      },
+      uploads: {
+        baseUrl: `${baseUrl}/uploads`,
+        paths: {
+          avatar: `${baseUrl}/uploads/avatars`,
+          logo: `${baseUrl}/uploads/boutiques/logos`,
+          banniere: `${baseUrl}/uploads/boutiques/bannieres`,
+          produit: `${baseUrl}/uploads/produits`
+        },
+        maxSizes: {
+          avatar: '2 MB',
+          logo: '2 MB',
+          banniere: '5 MB',
+          produit: '2 MB'
+        },
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+      },
+      placeholders: {
+        avatar: `${baseUrl}/uploads/placeholders/avatar.png`,
+        logo: `${baseUrl}/uploads/placeholders/logo.png`,
+        banniere: `${baseUrl}/uploads/placeholders/banniere.png`,
+        produit: `${baseUrl}/uploads/placeholders/produit.png`
+      }
+    }
+  });
+});
+
 /**
  * @route   GET /api
  * @desc    Documentation de l'API - Liste des endpoints disponibles
@@ -147,6 +186,7 @@ router.get('/', (req, res) => {
           { method: 'PUT', path: '/api/boutique/produits/:id/stock', description: 'Modifier stock' },
           { method: 'PUT', path: '/api/boutique/produits/:id/promo', description: 'Gerer promotion' },
           { method: 'PUT', path: '/api/boutique/produits/:id/image', description: 'Upload image principale' },
+          { method: 'DELETE', path: '/api/boutique/produits/:id/image', description: 'Supprimer image principale' },
           { method: 'POST', path: '/api/boutique/produits/:id/images', description: 'Ajouter image galerie' },
           { method: 'DELETE', path: '/api/boutique/produits/:id/images/:filename', description: 'Supprimer image galerie' }
         ]

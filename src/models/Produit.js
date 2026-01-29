@@ -125,7 +125,7 @@ const produitSchema = new mongoose.Schema({
  */
 produitSchema.index({ boutique: 1, isActive: 1 });
 produitSchema.index({ categorie: 1 });
-produitSchema.index({ slug: 1, boutique: 1 });
+produitSchema.index({ boutique: 1, slug: 1 });
 produitSchema.index({ nom: 'text', description: 'text' });
 produitSchema.index({ prix: 1 });
 produitSchema.index({ createdAt: -1 });

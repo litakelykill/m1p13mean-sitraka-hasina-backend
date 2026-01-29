@@ -603,7 +603,21 @@ const updatePromo = async (req, res) => {
             });
         }
 
-        // Valider le prix promo
+        // Cas 1: Desactiver la promo
+        if (enPromo === false) {
+            produit.enPromo = false;
+            produit.prixPromo = null;
+            await produit.save();
+            await produit.populate('categorie', 'nom slug');
+
+            return res.status(200).json({
+                success: true,
+                message: 'Promotion desactivee.',
+                data: { produit: formatProduitResponse(produit, req) }
+            });
+        }
+
+        // Cas 2: Definir/modifier le prix promo
         if (prixPromo !== undefined && prixPromo !== null) {
             if (prixPromo >= produit.prix) {
                 return res.status(PRODUIT_ERRORS.INVALID_PROMO.statusCode).json({
@@ -615,16 +629,16 @@ const updatePromo = async (req, res) => {
             produit.prixPromo = prixPromo;
         }
 
-        // Activer/desactiver la promo
-        if (enPromo !== undefined) {
-            if (enPromo && (produit.prixPromo === null || produit.prixPromo >= produit.prix)) {
+        // Cas 3: Activer la promo
+        if (enPromo === true) {
+            if (produit.prixPromo === null || produit.prixPromo >= produit.prix) {
                 return res.status(400).json({
                     success: false,
                     message: 'Definissez d\'abord un prix promo valide.',
                     error: 'NO_PROMO_PRICE'
                 });
             }
-            produit.enPromo = enPromo;
+            produit.enPromo = true;
         }
 
         await produit.save();
@@ -632,7 +646,7 @@ const updatePromo = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: produit.enPromo ? 'Promotion activee.' : 'Promotion desactivee.',
+            message: produit.enPromo ? 'Promotion activee.' : 'Prix promo mis a jour.',
             data: { produit: formatProduitResponse(produit, req) }
         });
 
@@ -712,6 +726,78 @@ const uploadImagePrincipale = async (req, res) => {
             } catch (e) {
                 console.error('Erreur suppression fichier:', e);
             }
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Supprimer l'image principale
+ * @route   DELETE /api/boutique/produits/:id/image
+ * @access  Private (BOUTIQUE)
+ */
+const deleteImagePrincipale = async (req, res) => {
+    try {
+        const produit = await Produit.findById(req.params.id);
+
+        if (!produit) {
+            return res.status(PRODUIT_ERRORS.NOT_FOUND.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NOT_FOUND.message,
+                error: PRODUIT_ERRORS.NOT_FOUND.code
+            });
+        }
+
+        // Verifier proprietaire
+        if (!checkOwnership(produit, req.user._id)) {
+            return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NOT_OWNER.message,
+                error: PRODUIT_ERRORS.NOT_OWNER.code
+            });
+        }
+
+        // Verifier qu'il y a une image
+        if (!produit.imagePrincipale) {
+            return res.status(PRODUIT_ERRORS.NO_IMAGE.statusCode).json({
+                success: false,
+                message: 'Aucune image principale a supprimer.',
+                error: 'NO_MAIN_IMAGE'
+            });
+        }
+
+        // Supprimer le fichier
+        try {
+            await deleteLocalFile(`${UPLOAD_DIR}/${produit.imagePrincipale}`);
+        } catch (e) {
+            console.error('Erreur suppression fichier:', e);
+        }
+
+        // Mettre a jour
+        produit.imagePrincipale = null;
+        await produit.save();
+        await produit.populate('categorie', 'nom slug');
+
+        res.status(200).json({
+            success: true,
+            message: 'Image principale supprimee.',
+            data: { produit: formatProduitResponse(produit, req) }
+        });
+
+    } catch (error) {
+        console.error('Erreur deleteImagePrincipale:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de produit invalide.',
+                error: 'INVALID_ID'
+            });
         }
 
         return res.status(500).json({
@@ -926,6 +1012,7 @@ module.exports = {
     updateStock,
     updatePromo,
     uploadImagePrincipale,
+    deleteImagePrincipale,
     addImage,
     deleteImage,
     getStats,

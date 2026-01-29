@@ -16,6 +16,7 @@ const authRoutes = require('./auth.routes');
 const adminRoutes = require('./admin.routes');
 const boutiqueRoutes = require('./boutique.routes');
 const categorieRoutes = require('./categorie.routes');
+const produitRoutes = require('./produit.routes');
 
 // Routes client (a implementer)
 // const clientRoutes = require('./client.routes');
@@ -50,6 +51,13 @@ router.use('/admin/categories', categorieRoutes);
  * Acces : BOUTIQUE uniquement
  */
 router.use('/boutique', boutiqueRoutes);
+
+/**
+ * Routes produits
+ * Prefixe : /api/boutique/produits
+ * Acces : BOUTIQUE uniquement
+ */
+router.use('/boutique/produits', produitRoutes);
 
 /**
  * Routes client
@@ -124,6 +132,23 @@ router.get('/', (req, res) => {
           { method: 'DELETE', path: '/api/boutique/logo', description: 'Supprimer logo' },
           { method: 'PUT', path: '/api/boutique/banniere', description: 'Upload banniere' },
           { method: 'DELETE', path: '/api/boutique/banniere', description: 'Supprimer banniere' }
+        ]
+      },
+      produits: {
+        description: 'Gestion des produits (BOUTIQUE only)',
+        routes: [
+          { method: 'POST', path: '/api/boutique/produits', description: 'Creer produit' },
+          { method: 'GET', path: '/api/boutique/produits', description: 'Liste produits' },
+          { method: 'GET', path: '/api/boutique/produits/stats', description: 'Statistiques' },
+          { method: 'GET', path: '/api/boutique/produits/:id', description: 'Details produit' },
+          { method: 'PUT', path: '/api/boutique/produits/:id', description: 'Modifier produit' },
+          { method: 'DELETE', path: '/api/boutique/produits/:id', description: 'Supprimer produit' },
+          { method: 'PUT', path: '/api/boutique/produits/:id/toggle', description: 'Activer/Desactiver' },
+          { method: 'PUT', path: '/api/boutique/produits/:id/stock', description: 'Modifier stock' },
+          { method: 'PUT', path: '/api/boutique/produits/:id/promo', description: 'Gerer promotion' },
+          { method: 'PUT', path: '/api/boutique/produits/:id/image', description: 'Upload image principale' },
+          { method: 'POST', path: '/api/boutique/produits/:id/images', description: 'Ajouter image galerie' },
+          { method: 'DELETE', path: '/api/boutique/produits/:id/images/:filename', description: 'Supprimer image galerie' }
         ]
       },
       client: {

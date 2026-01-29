@@ -18,7 +18,8 @@ const fs = require('fs');
 const UPLOAD_DIRS = {
   avatars: './uploads/avatars',
   logos: './uploads/boutiques/logos',
-  bannieres: './uploads/boutiques/bannieres'
+  bannieres: './uploads/boutiques/bannieres',
+  produits: './uploads/produits'
 };
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 2 * 1024 * 1024; // 2 MB
@@ -32,10 +33,9 @@ Object.values(UPLOAD_DIRS).forEach(dir => {
   }
 });
 
-/**
- * @desc Configuration de stockage Multer pour les avatars utilisateurs
- * @type {multer.StorageEngine}
- */
+// ============================================
+// STOCKAGE AVATAR
+// ============================================
 const avatarStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, UPLOAD_DIRS.avatars);
@@ -48,7 +48,9 @@ const avatarStorage = multer.diskStorage({
   }
 });
 
+// ============================================
 // STOCKAGE LOGO BOUTIQUE
+// ============================================
 const logoStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, UPLOAD_DIRS.logos);
@@ -61,7 +63,9 @@ const logoStorage = multer.diskStorage({
   }
 });
 
+// ============================================
 // STOCKAGE BANNIERE BOUTIQUE
+// ============================================
 const banniereStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, UPLOAD_DIRS.bannieres);
@@ -74,12 +78,9 @@ const banniereStorage = multer.diskStorage({
   }
 });
 
-/**
- * @desc Filtre pour n'accepter que les images de types autorisés
- * @param {Object} req - Requête Express
- * @param {Object} file - Fichier uploadé
- * @param {Function} cb - Callback
- */
+// ============================================
+// FILTRE DES FICHIERS
+// ============================================
 const imageFilter = (req, file, cb) => {
   if (ALLOWED_TYPES.includes(file.mimetype)) {
     cb(null, true);
@@ -109,6 +110,27 @@ const uploadBanniere = multer({
   fileFilter: imageFilter
 });
 
+// ============================================
+// STOCKAGE PRODUITS
+// ============================================
+const produitStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, UPLOAD_DIRS.produits);
+  },
+  filename: function (req, file, cb) {
+    const odId = req.user._id.toString();
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `produit_${odId}_${timestamp}${ext}`);
+  }
+});
+
+const uploadProduit = multer({
+  storage: produitStorage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: imageFilter
+});
+
 /**
  * @desc Supprime un fichier local
  * @param {string} filePath - Chemin du fichier à supprimer
@@ -117,7 +139,7 @@ const uploadBanniere = multer({
 const deleteLocalFile = (filePath) => {
   return new Promise((resolve, reject) => {
     const fullPath = filePath.startsWith('./') ? filePath : `./${filePath}`;
-    
+
     fs.unlink(fullPath, (err) => {
       if (err) {
         if (err.code === 'ENOENT') {
@@ -132,16 +154,14 @@ const deleteLocalFile = (filePath) => {
   });
 };
 
-/**
- * @desc Construit l'URL complete d'un fichier uploadé (avatar, logo, banniere) - HELPER
- * @param {string} filename - Nom du fichier
- * @param {string} type - Type de fichier ('avatar', 'logo', 'banniere')
- */
+// ============================================
+// HELPER : Construire URL complete
+// ============================================
 const buildFileUrl = (filename, type, req) => {
   if (!filename) return null;
-  
+
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  
+
   switch (type) {
     case 'avatar':
       return `${baseUrl}/uploads/avatars/${filename}`;
@@ -213,11 +233,12 @@ module.exports = {
   uploadAvatar,
   uploadLogo,
   uploadBanniere,
-  
+  uploadProduit,
+
   // Helpers
   deleteLocalFile,
   buildFileUrl,
-  
+
   // Constants
   UPLOAD_DIRS,
   MAX_FILE_SIZE,

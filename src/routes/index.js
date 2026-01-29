@@ -15,6 +15,7 @@ const router = express.Router();
 const authRoutes = require('./auth.routes');
 const adminRoutes = require('./admin.routes');
 const boutiqueRoutes = require('./boutique.routes');
+const categorieRoutes = require('./categorie.routes');
 
 // Routes client (a implementer)
 // const clientRoutes = require('./client.routes');
@@ -35,6 +36,13 @@ router.use('/auth', authRoutes);
  * Acces : ADMIN uniquement
  */
 router.use('/admin', adminRoutes);
+
+/**
+ * Routes categories
+ * Prefixe : /api/admin/categories
+ * Acces : ADMIN uniquement
+ */
+router.use('/admin/categories', categorieRoutes);
 
 /**
  * Routes boutique
@@ -88,6 +96,19 @@ router.get('/', (req, res) => {
           { method: 'PUT', path: '/api/admin/boutiques/:id/reactiver', description: 'Reactiver' },
           { method: 'PUT', path: '/api/admin/boutiques/:id/rejeter', description: 'Rejeter' },
           { method: 'DELETE', path: '/api/admin/boutiques/:id', description: 'Supprimer' }
+        ]
+      },
+      categories: {
+        description: 'Gestion des categories (ADMIN only)',
+        routes: [
+          { method: 'POST', path: '/api/admin/categories', description: 'Creer categorie' },
+          { method: 'GET', path: '/api/admin/categories', description: 'Liste categories' },
+          { method: 'GET', path: '/api/admin/categories/liste', description: 'Liste simple (dropdown)' },
+          { method: 'GET', path: '/api/admin/categories/:id', description: 'Details categorie' },
+          { method: 'PUT', path: '/api/admin/categories/:id', description: 'Modifier categorie' },
+          { method: 'DELETE', path: '/api/admin/categories/:id', description: 'Supprimer categorie' },
+          { method: 'PUT', path: '/api/admin/categories/:id/toggle', description: 'Activer/Desactiver' },
+          { method: 'PUT', path: '/api/admin/categories/:id/ordre', description: 'Modifier ordre' }
         ]
       },
       boutique: {

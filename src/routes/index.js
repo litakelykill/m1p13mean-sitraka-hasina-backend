@@ -17,6 +17,7 @@ const adminRoutes = require('./admin.routes');
 const boutiqueRoutes = require('./boutique.routes');
 const categorieRoutes = require('./categorie.routes');
 const produitRoutes = require('./produit.routes');
+const dashboardBoutiqueRoutes = require('./dashboard-boutique.routes');
 
 // Routes client (a implementer)
 // const clientRoutes = require('./client.routes');
@@ -60,6 +61,13 @@ router.use('/boutique', boutiqueRoutes);
 router.use('/boutique/produits', produitRoutes);
 
 /**
+ * Routes dashboard boutique
+ * Prefixe : /api/boutique/dashboard
+ * Acces : BOUTIQUE uniquement
+ */
+router.use('/boutique/dashboard', dashboardBoutiqueRoutes);
+
+/**
  * Routes client
  * Prefixe : /api/client
  * Acces : PUBLIC et CLIENT
@@ -71,7 +79,7 @@ router.use('/boutique/produits', produitRoutes);
 // ============================================
 router.get('/config', (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  
+
   res.status(200).json({
     success: true,
     data: {
@@ -189,6 +197,15 @@ router.get('/', (req, res) => {
           { method: 'DELETE', path: '/api/boutique/produits/:id/image', description: 'Supprimer image principale' },
           { method: 'POST', path: '/api/boutique/produits/:id/images', description: 'Ajouter image galerie' },
           { method: 'DELETE', path: '/api/boutique/produits/:id/images/:filename', description: 'Supprimer image galerie' }
+        ]
+      },
+      dashboardBoutique: {
+        description: 'Tableau de bord boutique (BOUTIQUE only)',
+        routes: [
+          { method: 'GET', path: '/api/boutique/dashboard', description: 'Stats globales' },
+          { method: 'GET', path: '/api/boutique/dashboard/resume', description: 'Resume rapide (widgets)' },
+          { method: 'GET', path: '/api/boutique/dashboard/alertes-stock', description: 'Alertes stock' },
+          { method: 'GET', path: '/api/boutique/dashboard/produits-par-categorie', description: 'Repartition par categorie' }
         ]
       },
       client: {

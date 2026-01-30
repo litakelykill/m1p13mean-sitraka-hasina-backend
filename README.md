@@ -14,27 +14,51 @@ Backend Express.js pour l'application de gestion de centre commercial.
 ### Structure
 
 ```
-m1p13mean-sitraka-hasina-backend/
-├── server.js                    
-├── seed.js                      
-├── package.json
-├── .env
-└── src/
-    ├── app.js                   
-    ├── config/
-    │   └── database.js          
-    ├── models/
-    │   └── User.js              
-    ├── controllers/
-    │   └── auth.controller.js   
-    ├── middlewares/
-    │   ├── index.js             
-    │   ├── auth.middleware.js   
-    │   ├── role.middleware.js   
-    │   └── validation.middleware.js  
-    └── routes/
-        ├── index.js             
-        └── auth.routes.js       
+src/
+├── config/
+│   ├── database.js                    
+│   └── multer.js                      
+│
+├── models/
+│   ├── User.js                        
+│   ├── Categorie.js                   
+│   └── Produit.js                     
+│
+├── controllers/
+│   ├── auth.controller.js             
+│   ├── admin.controller.js            
+│   ├── categorie.controller.js        
+│   ├── boutique.controller.js         
+│   ├── produit.controller.js          
+│   └── dashboard-boutique.controller.js 
+│
+├── middlewares/
+│   ├── auth.middleware.js             
+│   ├── role.middleware.js             
+│   ├── validation.middleware.js       
+│   ├── admin.validation.js            
+│   ├── boutique.validation.js         
+│   ├── categorie.validation.js        
+│   └── produit.validation.js          
+│
+├── routes/
+│   ├── index.js                       
+│   ├── auth.routes.js                 
+│   ├── admin.routes.js                
+│   ├── categorie.routes.js            
+│   ├── boutique.routes.js             
+│   ├── produit.routes.js              
+│   └── dashboard-boutique.routes.js   
+│
+├── app.js                             
+└── server.js                          
+
+uploads/
+├── avatars/                           
+├── boutiques/
+│   ├── logos/                         
+│   └── bannieres/                     
+└── produits/                           
 ```
 
 ## Technologies

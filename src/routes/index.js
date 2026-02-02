@@ -217,13 +217,15 @@ router.get('/', (req, res) => {
         ]
       },
       catalogue: {
-        description: 'Catalogue produits (PUBLIC)',
+        description: 'Catalogue produits et boutiques (PUBLIC)',
         routes: [
           { method: 'GET', path: '/api/catalogue/produits', description: 'Liste produits avec filtres' },
           { method: 'GET', path: '/api/catalogue/produits/:id', description: 'Details produit par ID' },
           { method: 'GET', path: '/api/catalogue/produits/slug/:slug', description: 'Details produit par slug' },
-          { method: 'GET', path: '/api/catalogue/categories', description: 'Categories avec comptage' },
-          { method: 'GET', path: '/api/catalogue/boutiques', description: 'Boutiques avec comptage' },
+          { method: 'GET', path: '/api/catalogue/categories', description: 'Categories produits avec comptage' },
+          { method: 'GET', path: '/api/catalogue/boutiques', description: 'Liste boutiques avec filtres' },
+          { method: 'GET', path: '/api/catalogue/boutiques/categories', description: 'Categories de boutiques' },
+          { method: 'GET', path: '/api/catalogue/boutiques/:id', description: 'Details boutique' },
           { method: 'GET', path: '/api/catalogue/boutiques/:id/produits', description: 'Produits d\'une boutique' }
         ]
       },

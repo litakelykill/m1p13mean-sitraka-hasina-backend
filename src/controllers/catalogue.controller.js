@@ -441,65 +441,286 @@ const getCategories = async (req, res) => {
 };
 
 /**
- * @desc    Liste des boutiques validees avec comptage produits
+ * @desc    Liste des boutiques validees avec filtres et pagination
  * @route   GET /api/catalogue/boutiques
  * @access  Public
  */
 const getBoutiques = async (req, res) => {
     try {
+        const { page, limit, skip } = getPagination(req.query);
+        const { categorie, search, sort } = req.query;
         const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-        // Recuperer les boutiques validees
-        const boutiques = await User.find({
+        // Construire le filtre de base
+        const filter = {
             role: 'BOUTIQUE',
             'boutique.isValidated': true,
             isActive: true
-        }).select('boutique.nomBoutique boutique.description boutique.logo boutique.categorie boutique.slug');
+        };
 
-        // Compter les produits par boutique
-        const produitsCount = await Produit.aggregate([
-            { $match: { isActive: true } },
+        // Filtre par categorie de boutique
+        if (categorie) {
+            filter['boutique.categorie'] = { $regex: categorie, $options: 'i' };
+        }
+
+        // Recherche par nom de boutique
+        if (search) {
+            filter['boutique.nomBoutique'] = { $regex: search, $options: 'i' };
+        }
+
+        // Recuperer les boutiques
+        const boutiques = await User.find(filter)
+            .select('boutique.nomBoutique boutique.description boutique.logo boutique.categorie boutique.slug createdAt')
+            .lean();
+
+        // Recuperer les IDs des boutiques
+        const boutiqueIds = boutiques.map(b => b._id);
+
+        // Compter les produits par boutique avec stats detaillees
+        const produitsStats = await Produit.aggregate([
+            { $match: { boutique: { $in: boutiqueIds } } },
             {
                 $group: {
                     _id: '$boutique',
-                    count: { $sum: 1 }
+                    produitsCount: { $sum: 1 },
+                    produitsActifs: { $sum: { $cond: ['$isActive', 1, 0] } },
+                    produitsEnPromo: { $sum: { $cond: [{ $and: ['$isActive', '$enPromo'] }, 1, 0] } }
                 }
             }
         ]);
 
         // Creer un map pour acces rapide
-        const countMap = {};
-        produitsCount.forEach(item => {
-            countMap[item._id.toString()] = item.count;
+        const statsMap = {};
+        produitsStats.forEach(item => {
+            statsMap[item._id.toString()] = {
+                produitsCount: item.produitsCount,
+                produitsActifs: item.produitsActifs,
+                produitsEnPromo: item.produitsEnPromo
+            };
         });
 
         // Formatter les boutiques
-        const boutiquesFormatted = boutiques.map(b => ({
-            _id: b._id,
-            nomBoutique: b.boutique.nomBoutique,
-            description: b.boutique.description,
-            categorie: b.boutique.categorie,
-            logo: b.boutique.logo,
-            logoUrl: b.boutique.logo
-                ? `${baseUrl}/uploads/boutiques/logos/${b.boutique.logo}`
-                : null,
-            produitsCount: countMap[b._id.toString()] || 0
-        }));
+        let boutiquesFormatted = boutiques.map(b => {
+            const stats = statsMap[b._id.toString()] || { produitsCount: 0, produitsActifs: 0, produitsEnPromo: 0 };
+            return {
+                _id: b._id,
+                nomBoutique: b.boutique.nomBoutique,
+                description: b.boutique.description,
+                categorie: b.boutique.categorie,
+                slug: b.boutique.slug,
+                logo: b.boutique.logo,
+                logoUrl: b.boutique.logo
+                    ? `${baseUrl}/uploads/boutiques/logos/${b.boutique.logo}`
+                    : null,
+                produitsCount: stats.produitsCount,
+                produitsActifs: stats.produitsActifs,
+                produitsEnPromo: stats.produitsEnPromo,
+                createdAt: b.createdAt
+            };
+        });
 
-        // Trier par nombre de produits (descroissant)
-        boutiquesFormatted.sort((a, b) => b.produitsCount - a.produitsCount);
+        // Appliquer le tri
+        switch (sort) {
+            case 'nom_asc':
+                boutiquesFormatted.sort((a, b) => a.nomBoutique.localeCompare(b.nomBoutique));
+                break;
+            case 'nom_desc':
+                boutiquesFormatted.sort((a, b) => b.nomBoutique.localeCompare(a.nomBoutique));
+                break;
+            case 'recent':
+                boutiquesFormatted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                break;
+            case 'ancien':
+                boutiquesFormatted.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                break;
+            case 'produits_desc':
+            default:
+                boutiquesFormatted.sort((a, b) => b.produitsActifs - a.produitsActifs);
+                break;
+        }
+
+        // Appliquer la pagination manuellement
+        const total = boutiquesFormatted.length;
+        const paginatedBoutiques = boutiquesFormatted.slice(skip, skip + limit);
 
         res.status(200).json({
             success: true,
             message: 'Liste des boutiques recuperee.',
             data: {
-                boutiques: boutiquesFormatted,
-                total: boutiquesFormatted.length
+                boutiques: paginatedBoutiques,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    totalPages: Math.ceil(total / limit)
+                },
+                filtres: {
+                    categorie: categorie || null,
+                    search: search || null,
+                    sort: sort || 'produits_desc'
+                }
             }
         });
 
     } catch (error) {
         console.error('Erreur getBoutiques catalogue:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Details complets d'une boutique
+ * @route   GET /api/catalogue/boutiques/:id
+ * @access  Public
+ */
+const getBoutiqueById = async (req, res) => {
+    try {
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+        // Recuperer la boutique
+        const boutique = await User.findOne({
+            _id: req.params.id,
+            role: 'BOUTIQUE',
+            'boutique.isValidated': true,
+            isActive: true
+        }).select('-password -refreshToken -resetPasswordToken -resetPasswordExpires');
+
+        if (!boutique) {
+            return res.status(CATALOGUE_ERRORS.BOUTIQUE_NOT_FOUND.statusCode).json({
+                success: false,
+                message: CATALOGUE_ERRORS.BOUTIQUE_NOT_FOUND.message,
+                error: CATALOGUE_ERRORS.BOUTIQUE_NOT_FOUND.code
+            });
+        }
+
+        // Statistiques des produits
+        const produitsStats = await Produit.aggregate([
+            { $match: { boutique: boutique._id } },
+            {
+                $group: {
+                    _id: null,
+                    produitsTotal: { $sum: 1 },
+                    produitsActifs: { $sum: { $cond: ['$isActive', 1, 0] } },
+                    produitsEnPromo: { $sum: { $cond: [{ $and: ['$isActive', '$enPromo'] }, 1, 0] } }
+                }
+            }
+        ]);
+
+        const stats = produitsStats[0] || { produitsTotal: 0, produitsActifs: 0, produitsEnPromo: 0 };
+
+        // Formatter la reponse
+        const boutiqueFormatted = {
+            _id: boutique._id,
+            nomBoutique: boutique.boutique.nomBoutique,
+            description: boutique.boutique.description,
+            categorie: boutique.boutique.categorie,
+            slug: boutique.boutique.slug,
+            logo: boutique.boutique.logo,
+            logoUrl: boutique.boutique.logo
+                ? `${baseUrl}/uploads/boutiques/logos/${boutique.boutique.logo}`
+                : null,
+            banniere: boutique.boutique.banniere,
+            banniereUrl: boutique.boutique.banniere
+                ? `${baseUrl}/uploads/boutiques/bannieres/${boutique.boutique.banniere}`
+                : null,
+            contact: {
+                email: boutique.email,
+                telephone: boutique.telephone,
+                siteWeb: boutique.boutique.siteWeb || null,
+                adresse: boutique.adresse || null
+            },
+            horaires: {
+                horairesTexte: boutique.boutique.horairesTexte || null,
+                detailles: boutique.boutique.horaires || null
+            },
+            reseauxSociaux: boutique.boutique.reseauxSociaux || {},
+            stats: {
+                produitsTotal: stats.produitsTotal,
+                produitsActifs: stats.produitsActifs,
+                produitsEnPromo: stats.produitsEnPromo
+            },
+            createdAt: boutique.createdAt
+        };
+
+        res.status(200).json({
+            success: true,
+            message: 'Details de la boutique recuperes.',
+            data: { boutique: boutiqueFormatted }
+        });
+
+    } catch (error) {
+        console.error('Erreur getBoutiqueById catalogue:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de boutique invalide.',
+                error: 'INVALID_ID'
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Liste des categories de boutiques distinctes
+ * @route   GET /api/catalogue/boutiques/categories
+ * @access  Public
+ */
+const getBoutiquesCategories = async (req, res) => {
+    try {
+        // Aggregation pour obtenir les categories distinctes
+        const categories = await User.aggregate([
+            {
+                $match: {
+                    role: 'BOUTIQUE',
+                    'boutique.isValidated': true,
+                    isActive: true,
+                    'boutique.categorie': { $exists: true, $ne: null, $ne: '' }
+                }
+            },
+            {
+                $group: {
+                    _id: '$boutique.categorie',
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { count: -1 } }
+        ]);
+
+        // Formatter
+        const categoriesFormatted = categories.map(c => ({
+            nom: c._id,
+            count: c.count
+        }));
+
+        // Total boutiques
+        const totalBoutiques = await User.countDocuments({
+            role: 'BOUTIQUE',
+            'boutique.isValidated': true,
+            isActive: true
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Categories de boutiques recuperees.',
+            data: {
+                categories: categoriesFormatted,
+                total: totalBoutiques
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur getBoutiquesCategories catalogue:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -648,6 +869,8 @@ module.exports = {
     getProduitBySlug,
     getCategories,
     getBoutiques,
+    getBoutiqueById,
+    getBoutiquesCategories,
     getProduitsByBoutique,
     CATALOGUE_ERRORS
 };

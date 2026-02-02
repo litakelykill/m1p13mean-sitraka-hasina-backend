@@ -12,12 +12,14 @@ const router = express.Router();
 
 // Controllers
 const {
-    getProduits,
-    getProduitById,
-    getProduitBySlug,
-    getCategories,
-    getBoutiques,
-    getProduitsByBoutique
+  getProduits,
+  getProduitById,
+  getProduitBySlug,
+  getCategories,
+  getBoutiques,
+  getBoutiqueById,
+  getBoutiquesCategories,
+  getProduitsByBoutique
 } = require('../controllers/catalogue.controller');
 
 // ============================================
@@ -66,10 +68,32 @@ router.get('/categories', getCategories);
 
 /**
  * @route   GET /api/catalogue/boutiques
- * @desc    Liste des boutiques validees avec comptage produits
+ * @desc    Liste des boutiques validees avec filtres et pagination
  * @access  Public
+ * 
+ * @query   page (default 1)
+ *          limit (default 12, max 50)
+ *          categorie (String, categorie de boutique)
+ *          search (String, recherche nom)
+ *          sort (nom_asc, nom_desc, recent, ancien, produits_desc)
  */
 router.get('/boutiques', getBoutiques);
+
+/**
+ * @route   GET /api/catalogue/boutiques/categories
+ * @desc    Liste des categories de boutiques distinctes
+ * @access  Public
+ * 
+ * Note: Cette route doit etre AVANT /:id pour eviter conflit
+ */
+router.get('/boutiques/categories', getBoutiquesCategories);
+
+/**
+ * @route   GET /api/catalogue/boutiques/:id
+ * @desc    Details complets d'une boutique
+ * @access  Public
+ */
+router.get('/boutiques/:id', getBoutiqueById);
 
 /**
  * @route   GET /api/catalogue/boutiques/:id/produits

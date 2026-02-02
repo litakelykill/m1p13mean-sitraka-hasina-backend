@@ -18,6 +18,7 @@ const boutiqueRoutes = require('./boutique.routes');
 const categorieRoutes = require('./categorie.routes');
 const produitRoutes = require('./produit.routes');
 const dashboardBoutiqueRoutes = require('./dashboard-boutique.routes');
+const catalogueRoutes = require('./catalogue.routes');
 
 // Routes client (a implementer)
 // const clientRoutes = require('./client.routes');
@@ -66,6 +67,13 @@ router.use('/boutique/produits', produitRoutes);
  * Acces : BOUTIQUE uniquement
  */
 router.use('/boutique/dashboard', dashboardBoutiqueRoutes);
+
+/**
+ * Routes catalogue
+ * Prefixe : /api/catalogue
+ * Acces : PUBLIC (pas d'authentification requise)
+ */
+router.use('/catalogue', catalogueRoutes);
 
 /**
  * Routes client
@@ -206,6 +214,17 @@ router.get('/', (req, res) => {
           { method: 'GET', path: '/api/boutique/dashboard/resume', description: 'Resume rapide (widgets)' },
           { method: 'GET', path: '/api/boutique/dashboard/alertes-stock', description: 'Alertes stock' },
           { method: 'GET', path: '/api/boutique/dashboard/produits-par-categorie', description: 'Repartition par categorie' }
+        ]
+      },
+      catalogue: {
+        description: 'Catalogue produits (PUBLIC)',
+        routes: [
+          { method: 'GET', path: '/api/catalogue/produits', description: 'Liste produits avec filtres' },
+          { method: 'GET', path: '/api/catalogue/produits/:id', description: 'Details produit par ID' },
+          { method: 'GET', path: '/api/catalogue/produits/slug/:slug', description: 'Details produit par slug' },
+          { method: 'GET', path: '/api/catalogue/categories', description: 'Categories avec comptage' },
+          { method: 'GET', path: '/api/catalogue/boutiques', description: 'Boutiques avec comptage' },
+          { method: 'GET', path: '/api/catalogue/boutiques/:id/produits', description: 'Produits d\'une boutique' }
         ]
       },
       client: {

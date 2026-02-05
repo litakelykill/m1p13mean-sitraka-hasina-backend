@@ -59,9 +59,8 @@ const panierSchema = new Schema({
 });
 
 /**
- * Indexes pour optimiser les requetes
+ * @desc Index pour trier les paniers par date de mise a jour (utile pour les operations de nettoyage)
  */
-panierSchema.index({ client: 1 });
 panierSchema.index({ updatedAt: 1 });
 
 // ============================================

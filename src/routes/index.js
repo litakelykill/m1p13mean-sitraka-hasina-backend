@@ -19,6 +19,7 @@ const categorieRoutes = require('./categorie.routes');
 const produitRoutes = require('./produit.routes');
 const dashboardBoutiqueRoutes = require('./dashboard-boutique.routes');
 const catalogueRoutes = require('./catalogue.routes');
+const panierRoutes = require('./panier.routes');
 
 // Routes client (a implementer)
 // const clientRoutes = require('./client.routes');
@@ -74,6 +75,13 @@ router.use('/boutique/dashboard', dashboardBoutiqueRoutes);
  * Acces : PUBLIC (pas d'authentification requise)
  */
 router.use('/catalogue', catalogueRoutes);
+
+/**
+ * Routes panier
+ * Prefixe : /api/panier
+ * Acces : CLIENT uniquement
+ */
+router.use('/panier', panierRoutes);
 
 /**
  * Routes client
@@ -227,6 +235,18 @@ router.get('/', (req, res) => {
           { method: 'GET', path: '/api/catalogue/boutiques/categories', description: 'Categories de boutiques' },
           { method: 'GET', path: '/api/catalogue/boutiques/:id', description: 'Details boutique' },
           { method: 'GET', path: '/api/catalogue/boutiques/:id/produits', description: 'Produits d\'une boutique' }
+        ]
+      },
+      panier: {
+        description: 'Panier client (CLIENT only)',
+        routes: [
+          { method: 'GET', path: '/api/panier', description: 'Voir le panier complet' },
+          { method: 'GET', path: '/api/panier/count', description: 'Nombre d\'articles (badge)' },
+          { method: 'GET', path: '/api/panier/verify', description: 'Verifier validite du panier' },
+          { method: 'POST', path: '/api/panier/items', description: 'Ajouter un produit' },
+          { method: 'PUT', path: '/api/panier/items/:produitId', description: 'Modifier quantite' },
+          { method: 'DELETE', path: '/api/panier/items/:produitId', description: 'Retirer un produit' },
+          { method: 'DELETE', path: '/api/panier', description: 'Vider le panier' }
         ]
       },
       client: {

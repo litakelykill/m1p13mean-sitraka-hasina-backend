@@ -1,7 +1,7 @@
 /**
  * Commande Client Controller
  * 
- * Controleur pour les commandes cote client
+ * Controleur pour la gestion des commandes cote client
  * 
  * @module controllers/commande-client.controller
  */
@@ -9,9 +9,10 @@
 const Commande = require('../models/Commande');
 const Panier = require('../models/Panier');
 const Produit = require('../models/Produit');
+const User = require('../models/User');
 
 /**
- * @desc Codes d'erreur pour les commandes client
+ * @desc Codes d'erreur standardises pour les operations de commande client
  */
 const COMMANDE_ERRORS = {
     PANIER_EMPTY: {
@@ -21,7 +22,7 @@ const COMMANDE_ERRORS = {
     },
     PANIER_INVALID: {
         code: 'PANIER_INVALID',
-        message: 'Certains produits du panier ne sont plus disponibles.',
+        message: 'Certains produits de votre panier ne sont plus disponibles.',
         statusCode: 400
     },
     COMMANDE_NOT_FOUND: {
@@ -31,13 +32,176 @@ const COMMANDE_ERRORS = {
     },
     COMMANDE_NOT_OWNER: {
         code: 'COMMANDE_NOT_OWNER',
-        message: 'Cette commande ne vous appartient pas.',
+        message: 'Vous n\'etes pas autorise a acceder a cette commande.',
         statusCode: 403
     },
     ANNULATION_IMPOSSIBLE: {
         code: 'ANNULATION_IMPOSSIBLE',
         message: 'Cette commande ne peut plus etre annulee.',
         statusCode: 400
+    },
+    ADRESSE_REQUIRED: {
+        code: 'ADRESSE_REQUIRED',
+        message: 'L\'adresse de livraison est requise.',
+        statusCode: 400
+    },
+    STOCK_INSUFFISANT: {
+        code: 'STOCK_INSUFFISANT',
+        message: 'Stock insuffisant pour certains produits.',
+        statusCode: 400
+    }
+};
+
+/**
+ * @desc Verifier le panier du client et preparer les items valides pour la commande - HELPER
+ * @param {String} clientId - L'ID du client pour lequel on verifie le panier
+ * @return {Object} - Un objet contenant le panier, les items valides et les erreurs eventuelles
+ */
+const verifierPanier = async (clientId) => {
+    const panier = await Panier.findByClientPopulated(clientId);
+
+    if (!panier || panier.items.length === 0) {
+        return { error: COMMANDE_ERRORS.PANIER_EMPTY };
+    }
+
+    const itemsValides = [];
+    const itemsInvalides = [];
+
+    for (const item of panier.items) {
+        const produit = item.produit;
+
+        // Verifier produit existe et actif
+        if (!produit || !produit._id || !produit.isActive) {
+            itemsInvalides.push({ produitId: item.produit, raison: 'PRODUIT_INACTIVE' });
+            continue;
+        }
+
+        // Verifier boutique validee
+        if (!produit.boutique ||
+            !produit.boutique.isActive ||
+            !produit.boutique.boutique?.isValidated) {
+            itemsInvalides.push({ produitId: produit._id, nom: produit.nom, raison: 'BOUTIQUE_INACTIVE' });
+            continue;
+        }
+
+        // Verifier stock
+        if (item.quantite > produit.stock) {
+            itemsInvalides.push({
+                produitId: produit._id,
+                nom: produit.nom,
+                raison: 'STOCK_INSUFFISANT',
+                stockDisponible: produit.stock,
+                quantiteDemandee: item.quantite
+            });
+            continue;
+        }
+
+        itemsValides.push({
+            produit: produit._id,
+            boutique: produit.boutique._id,
+            nomBoutique: produit.boutique.boutique.nomBoutique,
+            nom: produit.nom,
+            slug: produit.slug,
+            imagePrincipale: produit.imagePrincipale,
+            prix: produit.prix,
+            prixPromo: produit.enPromo ? produit.prixPromo : null,
+            quantite: item.quantite,
+            sousTotal: (produit.enPromo && produit.prixPromo ? produit.prixPromo : produit.prix) * item.quantite
+        });
+    }
+
+    if (itemsInvalides.length > 0) {
+        return {
+            error: { ...COMMANDE_ERRORS.PANIER_INVALID, data: { itemsInvalides } }
+        };
+    }
+
+    return { panier, itemsValides };
+};
+
+/**
+ * @desc Regrouper les items d'une commande par boutique pour creer les sous-commandes boutique - HELPER
+ * @param {Array} items - Les items de la commande a regrouper (doivent contenir boutique, nomBoutique, prix, quantite et sousTotal)
+ * @return {Array} - Un tableau de sous-commandes boutique contenant les items regroupes par boutique avec les totaux calcules
+ */
+const regrouperParBoutique = (items) => {
+    const boutiquesMap = new Map();
+
+    for (const item of items) {
+        const boutiqueId = item.boutique.toString();
+
+        if (!boutiquesMap.has(boutiqueId)) {
+            boutiquesMap.set(boutiqueId, {
+                boutique: item.boutique,
+                nomBoutique: item.nomBoutique,
+                items: [],
+                sousTotal: 0,
+                total: 0
+            });
+        }
+
+        const boutique = boutiquesMap.get(boutiqueId);
+        boutique.items.push(item);
+        boutique.sousTotal += item.prix * item.quantite;
+        boutique.total += item.sousTotal;
+    }
+
+    return Array.from(boutiquesMap.values()).map(b => ({
+        ...b,
+        statut: 'en_attente',
+        historiqueStatuts: [{
+            statut: 'en_attente',
+            date: new Date(),
+            commentaire: 'Commande recue'
+        }],
+        notes: []
+    }));
+};
+
+/**
+ * @desc Calculer les totaux d'une commande a partir de ses items - HELPER
+ * @param {Array} items - Les items de la commande a calculer (doivent contenir prix, quantite et sousTotal)
+ * @return {Object} - Un objet contenant le sousTotal, total et economies de la commande
+ */
+const calculerTotaux = (items) => {
+    let sousTotal = 0;
+    let total = 0;
+
+    for (const item of items) {
+        sousTotal += item.prix * item.quantite;
+        total += item.sousTotal;
+    }
+
+    return {
+        sousTotal,
+        total,
+        economies: sousTotal - total
+    };
+};
+
+/**
+ * @desc Decrementer le stock des produits d'une commande (utilise apres passage de commande) - HELPER
+ * @param {Array} items - Les items de la commande a traiter (doivent contenir produit et quantite)
+ * @return {Promise} - Une promesse qui se resolve lorsque le stock est decremente pour tous les produits
+ */
+const decrementerStock = async (items) => {
+    for (const item of items) {
+        await Produit.findByIdAndUpdate(item.produit, {
+            $inc: { stock: -item.quantite }
+        });
+    }
+};
+
+/**
+ * @desc Restaurer le stock des produits d'une commande (utilise lors de l'annulation) - HELPER
+ * @param {Array} items - Les items de la commande a restaurer (doivent contenir produit et quantite)
+ * @return {Promise} - Une promesse qui se resolve lorsque le stock est restaure pour tous les produits
+ */
+const restaurerStock = async (items) => {
+    for (const item of items) {
+        await Produit.findByIdAndUpdate(item.produit, {
+            $inc: { stock: item.quantite }
+        });
     }
 };
 
@@ -51,201 +215,79 @@ const passerCommande = async (req, res) => {
         const clientId = req.user._id;
         const { adresseLivraison, modePaiement = 'livraison' } = req.body;
 
-        // Recuperer le panier avec les produits peuples
-        const panier = await Panier.findByClientPopulated(clientId);
-
-        // Verifier que le panier existe et n'est pas vide
-        if (!panier || panier.items.length === 0) {
-            return res.status(COMMANDE_ERRORS.PANIER_EMPTY.statusCode).json({
+        // Verifier adresse
+        if (!adresseLivraison || !adresseLivraison.nom || !adresseLivraison.rue || !adresseLivraison.ville) {
+            return res.status(COMMANDE_ERRORS.ADRESSE_REQUIRED.statusCode).json({
                 success: false,
-                message: COMMANDE_ERRORS.PANIER_EMPTY.message,
-                error: COMMANDE_ERRORS.PANIER_EMPTY.code
+                message: COMMANDE_ERRORS.ADRESSE_REQUIRED.message,
+                error: COMMANDE_ERRORS.ADRESSE_REQUIRED.code
             });
         }
 
-        // Verifier la validite du panier (stock, produits actifs, etc.)
-        const problemesValidation = [];
-        const itemsValides = [];
+        // Verifier et preparer le panier
+        const { panier, itemsValides, error } = await verifierPanier(clientId);
 
-        for (const item of panier.items) {
-            const produit = item.produit;
-
-            // Verifier que le produit existe
-            if (!produit) {
-                problemesValidation.push({
-                    produitId: item.produit,
-                    message: 'Produit non trouve'
-                });
-                continue;
-            }
-
-            // Verifier que le produit est actif
-            if (!produit.isActive) {
-                problemesValidation.push({
-                    produitId: produit._id,
-                    nom: produit.nom,
-                    message: 'Ce produit n\'est plus disponible'
-                });
-                continue;
-            }
-
-            // Verifier la boutique
-            if (!produit.boutique || !produit.boutique.boutique?.isValidated) {
-                problemesValidation.push({
-                    produitId: produit._id,
-                    nom: produit.nom,
-                    message: 'La boutique de ce produit n\'est plus disponible'
-                });
-                continue;
-            }
-
-            // Verifier que la boutique est active
-            if (!produit.boutique.isActive) {
-                problemesValidation.push({
-                    produitId: produit._id,
-                    nom: produit.nom,
-                    message: 'La boutique de ce produit est inactive'
-                });
-                continue;
-            }
-
-            // Verifier le stock
-            if (produit.stock < item.quantite) {
-                problemesValidation.push({
-                    produitId: produit._id,
-                    nom: produit.nom,
-                    message: `Stock insuffisant (${produit.stock} disponibles)`,
-                    stockDisponible: produit.stock
-                });
-                continue;
-            }
-
-            itemsValides.push({
-                produit,
-                quantite: item.quantite
-            });
-        }
-
-        // Si des problemes sont detectes, retourner les erreurs
-        if (problemesValidation.length > 0) {
-            return res.status(COMMANDE_ERRORS.PANIER_INVALID.statusCode).json({
+        if (error) {
+            return res.status(error.statusCode).json({
                 success: false,
-                message: COMMANDE_ERRORS.PANIER_INVALID.message,
-                error: COMMANDE_ERRORS.PANIER_INVALID.code,
-                details: problemesValidation
+                message: error.message,
+                error: error.code,
+                data: error.data
             });
         }
 
-        // Generer le numero de commande
-        const numeroCommande = await Commande.genererNumero();
+        // Generer numero de commande
+        const numero = await Commande.genererNumero();
 
-        // Creer les items de commande avec snapshot des produits
-        const itemsCommande = [];
-        let sousTotal = 0;
-        let total = 0;
-        let economies = 0;
+        // Calculer totaux
+        const totaux = calculerTotaux(itemsValides);
 
         // Regrouper par boutique
-        const parBoutiqueMap = new Map();
-
-        for (const { produit, quantite } of itemsValides) {
-            const prixUnitaire = produit.prix;
-            const prixPromo = (produit.enPromo && produit.prixPromo !== null && produit.prixPromo < produit.prix)
-                ? produit.prixPromo
-                : null;
-            const prixEffectif = prixPromo || prixUnitaire;
-            const itemSousTotal = prixEffectif * quantite;
-
-            const itemCommande = {
-                produit: produit._id,
-                boutique: produit.boutique._id,
-                nom: produit.nom,
-                slug: produit.slug,
-                prix: prixUnitaire,
-                prixPromo: prixPromo,
-                quantite: quantite,
-                sousTotal: itemSousTotal
-            };
-
-            itemsCommande.push(itemCommande);
-            sousTotal += prixUnitaire * quantite;
-            total += itemSousTotal;
-
-            if (prixPromo) {
-                economies += (prixUnitaire - prixPromo) * quantite;
-            }
-
-            // Regrouper par boutique
-            const boutiqueId = produit.boutique._id.toString();
-            if (!parBoutiqueMap.has(boutiqueId)) {
-                parBoutiqueMap.set(boutiqueId, {
-                    boutique: produit.boutique._id,
-                    items: [],
-                    sousTotal: 0,
-                    statut: 'en_attente',
-                    historiqueStatuts: [{
-                        statut: 'en_attente',
-                        date: new Date(),
-                        commentaire: 'Commande recue'
-                    }],
-                    notes: []
-                });
-            }
-
-            const boutiqueData = parBoutiqueMap.get(boutiqueId);
-            boutiqueData.items.push(itemCommande);
-            boutiqueData.sousTotal += itemSousTotal;
-        }
+        const parBoutique = regrouperParBoutique(itemsValides);
 
         // Creer la commande
-        const commande = new Commande({
-            numero: numeroCommande,
+        const commande = await Commande.create({
+            numero,
             client: clientId,
-            adresseLivraison,
-            items: itemsCommande,
-            sousTotal,
-            total,
-            economies,
+            adresseLivraison: {
+                nom: adresseLivraison.nom,
+                prenom: adresseLivraison.prenom || '',
+                telephone: adresseLivraison.telephone || req.user.telephone || '',
+                rue: adresseLivraison.rue,
+                ville: adresseLivraison.ville,
+                codePostal: adresseLivraison.codePostal || '',
+                pays: adresseLivraison.pays || 'Madagascar',
+                instructions: adresseLivraison.instructions || ''
+            },
+            items: itemsValides,
+            sousTotal: totaux.sousTotal,
+            total: totaux.total,
+            economies: totaux.economies,
             modePaiement,
-            paiementStatut: 'en_attente',
+            paiementStatut: modePaiement === 'livraison' ? 'en_attente' : 'en_attente',
             statut: 'en_attente',
             historiqueStatuts: [{
                 statut: 'en_attente',
                 date: new Date(),
                 commentaire: 'Commande passee'
             }],
-            parBoutique: Array.from(parBoutiqueMap.values())
+            parBoutique
         });
 
-        await commande.save();
-
-        // Decrementer le stock des produits
-        for (const { produit, quantite } of itemsValides) {
-            await Produit.findByIdAndUpdate(produit._id, {
-                $inc: { stock: -quantite }
-            });
-        }
+        // Decrementer stock
+        await decrementerStock(itemsValides);
 
         // Vider le panier
         panier.clear();
         await panier.save();
 
-        // Retourner la commande creee
+        // Populer pour la reponse
+        await commande.populate('client', 'nom prenom email telephone');
+
         res.status(201).json({
             success: true,
             message: 'Commande passee avec succes.',
-            data: {
-                commande: {
-                    _id: commande._id,
-                    numero: commande.numero,
-                    statut: commande.statut,
-                    total: commande.total,
-                    economies: commande.economies,
-                    itemsCount: commande.itemsCount,
-                    boutiquesCount: commande.boutiquesCount,
-                    createdAt: commande.createdAt
-                }
-            }
+            data: { commande }
         });
 
     } catch (error) {
@@ -259,60 +301,58 @@ const passerCommande = async (req, res) => {
 };
 
 /**
- * @desc    Liste des commandes du client
+ * @desc    Liste des commandes du client connecte
  * @route   GET /api/commandes
  * @access  Private (CLIENT)
  */
-const mesCommandes = async (req, res) => {
+const getMesCommandes = async (req, res) => {
     try {
         const clientId = req.user._id;
         const { page = 1, limit = 10, statut } = req.query;
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10));
+        const skip = (pageNum - 1) * limitNum;
 
-        const query = { client: clientId };
-        if (statut) {
-            query.statut = statut;
-        }
-
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const filter = { client: clientId };
+        if (statut) filter.statut = statut;
 
         const [commandes, total] = await Promise.all([
-            Commande.find(query)
+            Commande.find(filter)
+                .select('numero statut total items parBoutique createdAt')
                 .sort({ createdAt: -1 })
                 .skip(skip)
-                .limit(parseInt(limit))
-                .populate('parBoutique.boutique', 'boutique.nomBoutique')
-                .lean(),
-            Commande.countDocuments(query)
+                .limit(limitNum),
+            Commande.countDocuments(filter)
         ]);
 
-        // Formater les commandes pour la liste
-        const commandesFormatees = commandes.map(cmd => ({
-            _id: cmd._id,
-            numero: cmd.numero,
-            statut: cmd.statut,
-            total: cmd.total,
-            economies: cmd.economies,
-            itemsCount: cmd.items.reduce((sum, i) => sum + i.quantite, 0),
-            boutiques: cmd.parBoutique.map(pb => pb.boutique?.boutique?.nomBoutique || 'Boutique'),
-            createdAt: cmd.createdAt
+        // Formatter les commandes
+        const commandesFormatted = commandes.map(c => ({
+            _id: c._id,
+            numero: c.numero,
+            statut: c.statut,
+            total: c.total,
+            itemsCount: c.items.reduce((sum, item) => sum + item.quantite, 0),
+            boutiquesCount: c.parBoutique.length,
+            boutiques: c.parBoutique.map(b => b.nomBoutique),
+            createdAt: c.createdAt
         }));
 
         res.status(200).json({
             success: true,
             message: 'Liste des commandes recuperee.',
             data: {
-                commandes: commandesFormatees,
+                commandes: commandesFormatted,
                 pagination: {
-                    page: parseInt(page),
-                    limit: parseInt(limit),
+                    page: pageNum,
+                    limit: limitNum,
                     total,
-                    totalPages: Math.ceil(total / parseInt(limit))
+                    totalPages: Math.ceil(total / limitNum)
                 }
             }
         });
 
     } catch (error) {
-        console.error('Erreur mesCommandes:', error);
+        console.error('Erreur getMesCommandes:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -326,15 +366,13 @@ const mesCommandes = async (req, res) => {
  * @route   GET /api/commandes/:id
  * @access  Private (CLIENT)
  */
-const detailsCommande = async (req, res) => {
+const getCommande = async (req, res) => {
     try {
         const clientId = req.user._id;
-        const { id } = req.params;
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-        const commande = await Commande.findById(id)
-            .populate('client', 'nom prenom email')
-            .populate('parBoutique.boutique', 'boutique.nomBoutique boutique.telephone boutique.email')
-            .lean();
+        const commande = await Commande.findById(req.params.id)
+            .populate('client', 'nom prenom email telephone');
 
         if (!commande) {
             return res.status(COMMANDE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
@@ -344,7 +382,7 @@ const detailsCommande = async (req, res) => {
             });
         }
 
-        // Verifier que le client est proprietaire
+        // Verifier que c'est la commande du client
         if (commande.client._id.toString() !== clientId.toString()) {
             return res.status(COMMANDE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
                 success: false,
@@ -353,35 +391,46 @@ const detailsCommande = async (req, res) => {
             });
         }
 
-        // Formater les sous-commandes avec les noms des boutiques
-        const parBoutiqueFormate = commande.parBoutique.map(sc => ({
-            boutique: {
-                _id: sc.boutique._id,
-                nomBoutique: sc.boutique?.boutique?.nomBoutique || 'Boutique'
-            },
-            items: sc.items,
-            sousTotal: sc.sousTotal,
-            statut: sc.statut,
-            historiqueStatuts: sc.historiqueStatuts
+        // Formatter avec URLs images
+        const commandeObj = commande.toObject();
+        commandeObj.items = commandeObj.items.map(item => ({
+            ...item,
+            imagePrincipaleUrl: item.imagePrincipale
+                ? `${baseUrl}/uploads/produits/${item.imagePrincipale}`
+                : null
         }));
 
-        // Retirer les notes internes (reservees aux boutiques)
-        const commandeFormatee = {
-            ...commande,
-            parBoutique: parBoutiqueFormate,
-            notes: undefined
-        };
+        commandeObj.parBoutique = commandeObj.parBoutique.map(b => ({
+            ...b,
+            items: b.items.map(item => ({
+                ...item,
+                imagePrincipaleUrl: item.imagePrincipale
+                    ? `${baseUrl}/uploads/produits/${item.imagePrincipale}`
+                    : null
+            }))
+        }));
+
+        // Ne pas exposer les notes internes au client
+        delete commandeObj.notes;
+        commandeObj.parBoutique.forEach(b => delete b.notes);
 
         res.status(200).json({
             success: true,
             message: 'Details de la commande recuperes.',
-            data: {
-                commande: commandeFormatee
-            }
+            data: { commande: commandeObj }
         });
 
     } catch (error) {
-        console.error('Erreur detailsCommande:', error);
+        console.error('Erreur getCommande:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de commande invalide.',
+                error: 'INVALID_ID'
+            });
+        }
+
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -391,19 +440,16 @@ const detailsCommande = async (req, res) => {
 };
 
 /**
- * @desc    Suivi de livraison (historique des statuts)
+ * @desc    Suivi de livraison (historique statuts)
  * @route   GET /api/commandes/:id/suivi
  * @access  Private (CLIENT)
  */
-const suiviCommande = async (req, res) => {
+const getSuiviCommande = async (req, res) => {
     try {
         const clientId = req.user._id;
-        const { id } = req.params;
 
-        const commande = await Commande.findById(id)
-            .select('numero client statut historiqueStatuts parBoutique')
-            .populate('parBoutique.boutique', 'boutique.nomBoutique')
-            .lean();
+        const commande = await Commande.findById(req.params.id)
+            .select('numero statut historiqueStatuts parBoutique client');
 
         if (!commande) {
             return res.status(COMMANDE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
@@ -413,7 +459,6 @@ const suiviCommande = async (req, res) => {
             });
         }
 
-        // Verifier que le client est proprietaire
         if (commande.client.toString() !== clientId.toString()) {
             return res.status(COMMANDE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
                 success: false,
@@ -421,38 +466,33 @@ const suiviCommande = async (req, res) => {
                 error: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.code
             });
         }
-
-        // Formater le suivi par boutique
-        const suiviParBoutique = commande.parBoutique.map(sc => ({
-            boutique: {
-                _id: sc.boutique._id,
-                nomBoutique: sc.boutique?.boutique?.nomBoutique || 'Boutique'
-            },
-            statut: sc.statut,
-            historiqueStatuts: sc.historiqueStatuts.map(h => ({
-                statut: h.statut,
-                date: h.date,
-                commentaire: h.commentaire
-            }))
-        }));
 
         res.status(200).json({
             success: true,
             message: 'Suivi de commande recupere.',
             data: {
                 numero: commande.numero,
-                statutGlobal: commande.statut,
-                historiqueGlobal: commande.historiqueStatuts.map(h => ({
-                    statut: h.statut,
-                    date: h.date,
-                    commentaire: h.commentaire
-                })),
-                parBoutique: suiviParBoutique
+                statut: commande.statut,
+                historiqueStatuts: commande.historiqueStatuts,
+                parBoutique: commande.parBoutique.map(b => ({
+                    nomBoutique: b.nomBoutique,
+                    statut: b.statut,
+                    historiqueStatuts: b.historiqueStatuts
+                }))
             }
         });
 
     } catch (error) {
-        console.error('Erreur suiviCommande:', error);
+        console.error('Erreur getSuiviCommande:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de commande invalide.',
+                error: 'INVALID_ID'
+            });
+        }
+
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -462,16 +502,16 @@ const suiviCommande = async (req, res) => {
 };
 
 /**
- * @desc    Annuler une commande
+ * @desc    Annuler une commande (si en_attente)
  * @route   PUT /api/commandes/:id/annuler
  * @access  Private (CLIENT)
  */
 const annulerCommande = async (req, res) => {
     try {
         const clientId = req.user._id;
-        const { id } = req.params;
+        const { raison } = req.body;
 
-        const commande = await Commande.findById(id);
+        const commande = await Commande.findById(req.params.id);
 
         if (!commande) {
             return res.status(COMMANDE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
@@ -481,7 +521,6 @@ const annulerCommande = async (req, res) => {
             });
         }
 
-        // Verifier que le client est proprietaire
         if (commande.client.toString() !== clientId.toString()) {
             return res.status(COMMANDE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
                 success: false,
@@ -490,59 +529,54 @@ const annulerCommande = async (req, res) => {
             });
         }
 
-        // Verifier que la commande peut etre annulee (statut en_attente uniquement)
+        // Verifier que la commande peut etre annulee
         if (commande.statut !== 'en_attente') {
             return res.status(COMMANDE_ERRORS.ANNULATION_IMPOSSIBLE.statusCode).json({
                 success: false,
                 message: COMMANDE_ERRORS.ANNULATION_IMPOSSIBLE.message,
-                error: COMMANDE_ERRORS.ANNULATION_IMPOSSIBLE.code,
-                details: `Le statut actuel est "${commande.statut}". Seules les commandes en attente peuvent etre annulees.`
+                error: COMMANDE_ERRORS.ANNULATION_IMPOSSIBLE.code
             });
         }
 
-        // Mettre a jour le statut
-        commande.statut = 'annulee';
-        commande.historiqueStatuts.push({
-            statut: 'annulee',
-            date: new Date(),
-            commentaire: 'Commande annulee par le client',
-            auteur: clientId
-        });
+        // Annuler la commande
+        commande.ajouterHistoriqueStatut('annulee', clientId, raison || 'Annulee par le client');
 
-        // Mettre a jour les sous-commandes
+        // Annuler toutes les sous-commandes
         for (const sousCommande of commande.parBoutique) {
-            sousCommande.statut = 'annulee';
             sousCommande.historiqueStatuts.push({
                 statut: 'annulee',
                 date: new Date(),
-                commentaire: 'Commande annulee par le client',
+                commentaire: raison || 'Annulee par le client',
                 auteur: clientId
             });
+            sousCommande.statut = 'annulee';
         }
 
         await commande.save();
 
-        // Restaurer le stock des produits
-        for (const item of commande.items) {
-            await Produit.findByIdAndUpdate(item.produit, {
-                $inc: { stock: item.quantite }
-            });
-        }
+        // Restaurer le stock
+        await restaurerStock(commande.items);
 
         res.status(200).json({
             success: true,
             message: 'Commande annulee avec succes.',
             data: {
-                commande: {
-                    _id: commande._id,
-                    numero: commande.numero,
-                    statut: commande.statut
-                }
+                numero: commande.numero,
+                statut: commande.statut
             }
         });
 
     } catch (error) {
         console.error('Erreur annulerCommande:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de commande invalide.',
+                error: 'INVALID_ID'
+            });
+        }
+
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -553,9 +587,9 @@ const annulerCommande = async (req, res) => {
 
 module.exports = {
     passerCommande,
-    mesCommandes,
-    detailsCommande,
-    suiviCommande,
+    getMesCommandes,
+    getCommande,
+    getSuiviCommande,
     annulerCommande,
     COMMANDE_ERRORS
 };

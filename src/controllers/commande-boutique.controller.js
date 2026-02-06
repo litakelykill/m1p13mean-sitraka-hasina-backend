@@ -1,18 +1,19 @@
 /**
  * Commande Boutique Controller
  * 
- * Controleur pour les commandes cote boutique
+ * Controleur pour la gestion des commandes cote boutique
  * 
  * @module controllers/commande-boutique.controller
  */
 
 const Commande = require('../models/Commande');
+const { TRANSITIONS_AUTORISEES } = require('../models/Commande');
 const Produit = require('../models/Produit');
 
 /**
- * @desc Codes d'erreur pour les commandes boutique
+ * @desc Codes d'erreur standardises pour les operations de commande boutique
  */
-const COMMANDE_ERRORS = {
+const COMMANDE_BOUTIQUE_ERRORS = {
     COMMANDE_NOT_FOUND: {
         code: 'COMMANDE_NOT_FOUND',
         message: 'Commande non trouvee.',
@@ -20,13 +21,68 @@ const COMMANDE_ERRORS = {
     },
     COMMANDE_NOT_OWNER: {
         code: 'COMMANDE_NOT_OWNER',
-        message: 'Cette commande ne concerne pas votre boutique.',
+        message: 'Cette commande ne contient pas de produits de votre boutique.',
         statusCode: 403
     },
     STATUT_INVALID: {
         code: 'STATUT_INVALID',
         message: 'Transition de statut non autorisee.',
         statusCode: 400
+    },
+    NOTE_REQUIRED: {
+        code: 'NOTE_REQUIRED',
+        message: 'Le contenu de la note est requis.',
+        statusCode: 400
+    }
+};
+
+/**
+ * @desc Formatter une commande pour n'afficher que les details pertinents a une boutique - HELPER
+ * @param {Object} commande - La commande a formatter
+ * @param {String} boutiqueId - L'ID de la boutique pour laquelle on formatte la commande
+ * @param {String} baseUrl - L'URL de base du serveur pour construire les liens d'images
+ * @return {Object|null} - La commande formattee pour la boutique ou null si la boutique n'est pas concernee par la commande
+ */
+const formatterCommandePourBoutique = (commande, boutiqueId, baseUrl) => {
+    const sousCommande = commande.parBoutique.find(
+        sc => sc.boutique.toString() === boutiqueId.toString()
+    );
+
+    if (!sousCommande) return null;
+
+    return {
+        _id: commande._id,
+        numero: commande.numero,
+        client: commande.client,
+        adresseLivraison: commande.adresseLivraison,
+        items: sousCommande.items.map(item => ({
+            ...item.toObject ? item.toObject() : item,
+            imagePrincipaleUrl: item.imagePrincipale
+                ? `${baseUrl}/uploads/produits/${item.imagePrincipale}`
+                : null
+        })),
+        sousTotal: sousCommande.sousTotal,
+        total: sousCommande.total,
+        statut: sousCommande.statut,
+        historiqueStatuts: sousCommande.historiqueStatuts,
+        notes: sousCommande.notes,
+        statutGlobal: commande.statut,
+        modePaiement: commande.modePaiement,
+        paiementStatut: commande.paiementStatut,
+        createdAt: commande.createdAt,
+        updatedAt: commande.updatedAt
+    };
+};
+
+/**
+ * @desc Restaurer le stock des produits d'une boutique en cas d'annulation ou de rupture - HELPER
+ * @param {Array} items - Les items de la sous-commande boutique contenant les references produit et quantite
+ */
+const restaurerStockBoutique = async (items) => {
+    for (const item of items) {
+        await Produit.findByIdAndUpdate(item.produit, {
+            $inc: { stock: item.quantite }
+        });
     }
 };
 
@@ -35,25 +91,19 @@ const COMMANDE_ERRORS = {
  * @route   GET /api/boutique/commandes
  * @access  Private (BOUTIQUE)
  */
-const listeCommandes = async (req, res) => {
+const getCommandes = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
-        const {
-            page = 1,
-            limit = 10,
-            statut = 'toutes',
-            dateDebut,
-            dateFin
-        } = req.query;
+        const { page = 1, limit = 10, statut } = req.query;
+        const pageNum = Math.max(1, parseInt(page));
+        const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10));
+        const skip = (pageNum - 1) * limitNum;
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-        // Construire la requete
-        const query = {
-            'parBoutique.boutique': boutiqueId
-        };
-
-        // Filtre par statut de la sous-commande
-        if (statut && statut !== 'toutes') {
-            query['parBoutique'] = {
+        // Filtrer par boutique dans parBoutique
+        const filter = { 'parBoutique.boutique': boutiqueId };
+        if (statut) {
+            filter['parBoutique'] = {
                 $elemMatch: {
                     boutique: boutiqueId,
                     statut: statut
@@ -61,70 +111,45 @@ const listeCommandes = async (req, res) => {
             };
         }
 
-        // Filtre par date
-        if (dateDebut || dateFin) {
-            query.createdAt = {};
-            if (dateDebut) {
-                query.createdAt.$gte = new Date(dateDebut);
-            }
-            if (dateFin) {
-                query.createdAt.$lte = new Date(dateFin);
-            }
-        }
-
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-
         const [commandes, total] = await Promise.all([
-            Commande.find(query)
+            Commande.find(filter)
+                .populate('client', 'nom prenom email telephone')
                 .sort({ createdAt: -1 })
                 .skip(skip)
-                .limit(parseInt(limit))
-                .populate('client', 'nom prenom email')
-                .lean(),
-            Commande.countDocuments(query)
+                .limit(limitNum),
+            Commande.countDocuments(filter)
         ]);
 
-        // Extraire uniquement les informations pertinentes pour cette boutique
-        const commandesFormatees = commandes.map(cmd => {
-            const sousCommande = cmd.parBoutique.find(
-                sc => sc.boutique.toString() === boutiqueId.toString()
-            );
-
+        // Formatter les commandes pour cette boutique
+        const commandesFormatted = commandes.map(c => {
+            const formatted = formatterCommandePourBoutique(c, boutiqueId, baseUrl);
             return {
-                _id: cmd._id,
-                numero: cmd.numero,
-                client: {
-                    nom: cmd.client?.nom,
-                    prenom: cmd.client?.prenom,
-                    email: cmd.client?.email
-                },
-                statut: sousCommande?.statut || cmd.statut,
-                itemsCount: sousCommande?.items.reduce((sum, i) => sum + i.quantite, 0) || 0,
-                sousTotal: sousCommande?.sousTotal || 0,
-                adresseLivraison: {
-                    ville: cmd.adresseLivraison.ville,
-                    codePostal: cmd.adresseLivraison.codePostal
-                },
-                createdAt: cmd.createdAt
+                _id: formatted._id,
+                numero: c.numero,
+                client: c.client,
+                statut: formatted.statut,
+                total: formatted.total,
+                itemsCount: formatted.items.reduce((sum, i) => sum + i.quantite, 0),
+                createdAt: c.createdAt
             };
-        });
+        }).filter(c => c !== null);
 
         res.status(200).json({
             success: true,
             message: 'Liste des commandes recuperee.',
             data: {
-                commandes: commandesFormatees,
+                commandes: commandesFormatted,
                 pagination: {
-                    page: parseInt(page),
-                    limit: parseInt(limit),
+                    page: pageNum,
+                    limit: limitNum,
                     total,
-                    totalPages: Math.ceil(total / parseInt(limit))
+                    totalPages: Math.ceil(total / limitNum)
                 }
             }
         });
 
     } catch (error) {
-        console.error('Erreur listeCommandes boutique:', error);
+        console.error('Erreur getCommandes boutique:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -138,69 +163,49 @@ const listeCommandes = async (req, res) => {
  * @route   GET /api/boutique/commandes/nouvelles
  * @access  Private (BOUTIQUE)
  */
-const commandesNouvelles = async (req, res) => {
+const getNouvellesCommandes = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
-        const { page = 1, limit = 10 } = req.query;
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-        const query = {
+        const commandes = await Commande.find({
             'parBoutique': {
                 $elemMatch: {
                     boutique: boutiqueId,
                     statut: 'en_attente'
                 }
             }
-        };
+        })
+            .populate('client', 'nom prenom email telephone')
+            .sort({ createdAt: -1 })
+            .limit(50);
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-
-        const [commandes, total] = await Promise.all([
-            Commande.find(query)
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit))
-                .populate('client', 'nom prenom email telephone')
-                .lean(),
-            Commande.countDocuments(query)
-        ]);
-
-        // Formater les commandes
-        const commandesFormatees = commandes.map(cmd => {
-            const sousCommande = cmd.parBoutique.find(
-                sc => sc.boutique.toString() === boutiqueId.toString()
-            );
-
+        const commandesFormatted = commandes.map(c => {
+            const formatted = formatterCommandePourBoutique(c, boutiqueId, baseUrl);
             return {
-                _id: cmd._id,
-                numero: cmd.numero,
-                client: {
-                    nom: cmd.client?.nom,
-                    prenom: cmd.client?.prenom,
-                    telephone: cmd.client?.telephone
-                },
-                items: sousCommande?.items || [],
-                sousTotal: sousCommande?.sousTotal || 0,
-                adresseLivraison: cmd.adresseLivraison,
-                createdAt: cmd.createdAt
+                _id: c._id,
+                numero: c.numero,
+                client: c.client,
+                statut: formatted.statut,
+                total: formatted.total,
+                itemsCount: formatted.items.reduce((sum, i) => sum + i.quantite, 0),
+                items: formatted.items,
+                adresseLivraison: c.adresseLivraison,
+                createdAt: c.createdAt
             };
-        });
+        }).filter(c => c !== null);
 
         res.status(200).json({
             success: true,
-            message: 'Commandes en attente recuperees.',
+            message: 'Nouvelles commandes recuperees.',
             data: {
-                commandes: commandesFormatees,
-                pagination: {
-                    page: parseInt(page),
-                    limit: parseInt(limit),
-                    total,
-                    totalPages: Math.ceil(total / parseInt(limit))
-                }
+                commandes: commandesFormatted,
+                count: commandesFormatted.length
             }
         });
 
     } catch (error) {
-        console.error('Erreur commandesNouvelles:', error);
+        console.error('Erreur getNouvellesCommandes:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -210,40 +215,30 @@ const commandesNouvelles = async (req, res) => {
 };
 
 /**
- * @desc    Statistiques des commandes
+ * @desc    Statistiques commandes de la boutique
  * @route   GET /api/boutique/commandes/stats
  * @access  Private (BOUTIQUE)
  */
-const statsCommandes = async (req, res) => {
+const getStats = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
 
         const now = new Date();
-        const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-        const debutSemaine = new Date(now);
+        const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const debutSemaine = new Date(debutJour);
         debutSemaine.setDate(debutSemaine.getDate() - debutSemaine.getDay());
-        debutSemaine.setHours(0, 0, 0, 0);
         const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        // Agregation pour les statistiques
-        const stats = await Commande.aggregate([
-            {
-                $match: {
-                    'parBoutique.boutique': boutiqueId
-                }
-            },
-            {
-                $unwind: '$parBoutique'
-            },
-            {
-                $match: {
-                    'parBoutique.boutique': boutiqueId
-                }
-            },
+        // Aggregation pour les stats
+        const statsAggregation = await Commande.aggregate([
+            { $match: { 'parBoutique.boutique': boutiqueId } },
+            { $unwind: '$parBoutique' },
+            { $match: { 'parBoutique.boutique': boutiqueId } },
             {
                 $group: {
                     _id: null,
                     totalCommandes: { $sum: 1 },
+                    totalCA: { $sum: '$parBoutique.total' },
                     commandesEnAttente: {
                         $sum: { $cond: [{ $eq: ['$parBoutique.statut', 'en_attente'] }, 1, 0] }
                     },
@@ -261,118 +256,95 @@ const statsCommandes = async (req, res) => {
                     },
                     commandesAnnulees: {
                         $sum: { $cond: [{ $eq: ['$parBoutique.statut', 'annulee'] }, 1, 0] }
-                    },
-                    chiffreAffairesTotal: {
-                        $sum: {
-                            $cond: [
-                                { $in: ['$parBoutique.statut', ['confirmee', 'en_preparation', 'expediee', 'livree']] },
-                                '$parBoutique.sousTotal',
-                                0
-                            ]
-                        }
                     }
                 }
             }
         ]);
 
-        // Statistiques par periode
-        const statsPeriode = await Commande.aggregate([
-            {
-                $match: {
-                    'parBoutique.boutique': boutiqueId,
-                    'parBoutique.statut': { $in: ['confirmee', 'en_preparation', 'expediee', 'livree'] }
+        // Stats par periode
+        const [statsJour, statsSemaine, statsMois] = await Promise.all([
+            Commande.aggregate([
+                { $match: { 'parBoutique.boutique': boutiqueId, createdAt: { $gte: debutJour } } },
+                { $unwind: '$parBoutique' },
+                { $match: { 'parBoutique.boutique': boutiqueId } },
+                {
+                    $group: {
+                        _id: null,
+                        count: { $sum: 1 },
+                        total: { $sum: '$parBoutique.total' }
+                    }
                 }
-            },
-            {
-                $unwind: '$parBoutique'
-            },
-            {
-                $match: {
-                    'parBoutique.boutique': boutiqueId,
-                    'parBoutique.statut': { $in: ['confirmee', 'en_preparation', 'expediee', 'livree'] }
+            ]),
+            Commande.aggregate([
+                { $match: { 'parBoutique.boutique': boutiqueId, createdAt: { $gte: debutSemaine } } },
+                { $unwind: '$parBoutique' },
+                { $match: { 'parBoutique.boutique': boutiqueId } },
+                {
+                    $group: {
+                        _id: null,
+                        count: { $sum: 1 },
+                        total: { $sum: '$parBoutique.total' }
+                    }
                 }
-            },
-            {
-                $facet: {
-                    jour: [
-                        { $match: { createdAt: { $gte: debutJour } } },
-                        {
-                            $group: {
-                                _id: null,
-                                count: { $sum: 1 },
-                                montant: { $sum: '$parBoutique.sousTotal' }
-                            }
-                        }
-                    ],
-                    semaine: [
-                        { $match: { createdAt: { $gte: debutSemaine } } },
-                        {
-                            $group: {
-                                _id: null,
-                                count: { $sum: 1 },
-                                montant: { $sum: '$parBoutique.sousTotal' }
-                            }
-                        }
-                    ],
-                    mois: [
-                        { $match: { createdAt: { $gte: debutMois } } },
-                        {
-                            $group: {
-                                _id: null,
-                                count: { $sum: 1 },
-                                montant: { $sum: '$parBoutique.sousTotal' }
-                            }
-                        }
-                    ]
+            ]),
+            Commande.aggregate([
+                { $match: { 'parBoutique.boutique': boutiqueId, createdAt: { $gte: debutMois } } },
+                { $unwind: '$parBoutique' },
+                { $match: { 'parBoutique.boutique': boutiqueId } },
+                {
+                    $group: {
+                        _id: null,
+                        count: { $sum: 1 },
+                        total: { $sum: '$parBoutique.total' }
+                    }
                 }
-            }
+            ])
         ]);
 
-        const globalStats = stats[0] || {
+        const stats = statsAggregation[0] || {
             totalCommandes: 0,
+            totalCA: 0,
             commandesEnAttente: 0,
             commandesConfirmees: 0,
             commandesEnPreparation: 0,
             commandesExpediees: 0,
             commandesLivrees: 0,
-            commandesAnnulees: 0,
-            chiffreAffairesTotal: 0
+            commandesAnnulees: 0
         };
-
-        const periodeStats = statsPeriode[0] || { jour: [], semaine: [], mois: [] };
 
         res.status(200).json({
             success: true,
-            message: 'Statistiques des commandes recuperees.',
+            message: 'Statistiques recuperees.',
             data: {
-                global: globalStats,
-                parStatut: {
-                    en_attente: globalStats.commandesEnAttente,
-                    confirmee: globalStats.commandesConfirmees,
-                    en_preparation: globalStats.commandesEnPreparation,
-                    expediee: globalStats.commandesExpediees,
-                    livree: globalStats.commandesLivrees,
-                    annulee: globalStats.commandesAnnulees
-                },
-                periode: {
-                    jour: {
-                        commandes: periodeStats.jour[0]?.count || 0,
-                        chiffreAffaires: periodeStats.jour[0]?.montant || 0
-                    },
-                    semaine: {
-                        commandes: periodeStats.semaine[0]?.count || 0,
-                        chiffreAffaires: periodeStats.semaine[0]?.montant || 0
-                    },
-                    mois: {
-                        commandes: periodeStats.mois[0]?.count || 0,
-                        chiffreAffaires: periodeStats.mois[0]?.montant || 0
+                global: {
+                    totalCommandes: stats.totalCommandes,
+                    totalCA: stats.totalCA,
+                    parStatut: {
+                        en_attente: stats.commandesEnAttente,
+                        confirmee: stats.commandesConfirmees,
+                        en_preparation: stats.commandesEnPreparation,
+                        expediee: stats.commandesExpediees,
+                        livree: stats.commandesLivrees,
+                        annulee: stats.commandesAnnulees
                     }
+                },
+                jour: {
+                    commandes: statsJour[0]?.count || 0,
+                    ca: statsJour[0]?.total || 0
+                },
+                semaine: {
+                    commandes: statsSemaine[0]?.count || 0,
+                    ca: statsSemaine[0]?.total || 0
+                },
+                mois: {
+                    commandes: statsMois[0]?.count || 0,
+                    ca: statsMois[0]?.total || 0
                 }
             }
         });
 
     } catch (error) {
-        console.error('Erreur statsCommandes:', error);
+        console.error('Erreur getStats commandes:', error);
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -386,60 +358,49 @@ const statsCommandes = async (req, res) => {
  * @route   GET /api/boutique/commandes/:id
  * @access  Private (BOUTIQUE)
  */
-const detailsCommande = async (req, res) => {
+const getCommandeDetails = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
-        const { id } = req.params;
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-        const commande = await Commande.findById(id)
-            .populate('client', 'nom prenom email telephone')
-            .lean();
+        const commande = await Commande.findById(req.params.id)
+            .populate('client', 'nom prenom email telephone');
 
         if (!commande) {
-            return res.status(COMMANDE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
+            return res.status(COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
                 success: false,
-                message: COMMANDE_ERRORS.COMMANDE_NOT_FOUND.message,
-                error: COMMANDE_ERRORS.COMMANDE_NOT_FOUND.code
+                message: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_FOUND.message,
+                error: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_FOUND.code
             });
         }
 
-        // Trouver la sous-commande de cette boutique
-        const sousCommande = commande.parBoutique.find(
-            sc => sc.boutique.toString() === boutiqueId.toString()
-        );
+        const commandeFormatted = formatterCommandePourBoutique(commande, boutiqueId, baseUrl);
 
-        if (!sousCommande) {
-            return res.status(COMMANDE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
+        if (!commandeFormatted) {
+            return res.status(COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
                 success: false,
-                message: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.message,
-                error: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.code
+                message: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_OWNER.message,
+                error: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_OWNER.code
             });
         }
 
         res.status(200).json({
             success: true,
             message: 'Details de la commande recuperes.',
-            data: {
-                commande: {
-                    _id: commande._id,
-                    numero: commande.numero,
-                    client: commande.client,
-                    adresseLivraison: commande.adresseLivraison,
-                    items: sousCommande.items,
-                    sousTotal: sousCommande.sousTotal,
-                    statut: sousCommande.statut,
-                    historiqueStatuts: sousCommande.historiqueStatuts,
-                    notes: sousCommande.notes,
-                    modePaiement: commande.modePaiement,
-                    paiementStatut: commande.paiementStatut,
-                    createdAt: commande.createdAt,
-                    updatedAt: commande.updatedAt
-                }
-            }
+            data: { commande: commandeFormatted }
         });
 
     } catch (error) {
-        console.error('Erreur detailsCommande boutique:', error);
+        console.error('Erreur getCommandeDetails boutique:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de commande invalide.',
+                error: 'INVALID_ID'
+            });
+        }
+
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -456,91 +417,71 @@ const detailsCommande = async (req, res) => {
 const changerStatut = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
-        const { id } = req.params;
-        const { statut, commentaire = '' } = req.body;
+        const { statut, commentaire } = req.body;
 
-        const commande = await Commande.findById(id);
+        const commande = await Commande.findById(req.params.id);
 
         if (!commande) {
-            return res.status(COMMANDE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
+            return res.status(COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
                 success: false,
-                message: COMMANDE_ERRORS.COMMANDE_NOT_FOUND.message,
-                error: COMMANDE_ERRORS.COMMANDE_NOT_FOUND.code
+                message: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_FOUND.message,
+                error: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_FOUND.code
             });
         }
 
-        // Trouver la sous-commande de cette boutique
-        const sousCommandeIndex = commande.parBoutique.findIndex(
-            sc => sc.boutique.toString() === boutiqueId.toString()
-        );
+        const sousCommande = commande.getSousCommandeBoutique(boutiqueId);
 
-        if (sousCommandeIndex === -1) {
-            return res.status(COMMANDE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
+        if (!sousCommande) {
+            return res.status(COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
                 success: false,
-                message: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.message,
-                error: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.code
+                message: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_OWNER.message,
+                error: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_OWNER.code
             });
         }
 
-        const sousCommande = commande.parBoutique[sousCommandeIndex];
-
-        // Verifier que la transition est autorisee
-        if (!Commande.transitionAutorisee(sousCommande.statut, statut)) {
-            return res.status(COMMANDE_ERRORS.STATUT_INVALID.statusCode).json({
+        // Verifier la transition de statut
+        if (!Commande.isTransitionAutorisee(sousCommande.statut, statut)) {
+            return res.status(COMMANDE_BOUTIQUE_ERRORS.STATUT_INVALID.statusCode).json({
                 success: false,
-                message: COMMANDE_ERRORS.STATUT_INVALID.message,
-                error: COMMANDE_ERRORS.STATUT_INVALID.code,
-                details: `Transition de "${sousCommande.statut}" vers "${statut}" non autorisee.`
+                message: `Transition de '${sousCommande.statut}' vers '${statut}' non autorisee.`,
+                error: COMMANDE_BOUTIQUE_ERRORS.STATUT_INVALID.code,
+                data: {
+                    statutActuel: sousCommande.statut,
+                    transitionsAutorisees: TRANSITIONS_AUTORISEES[sousCommande.statut]
+                }
             });
         }
-
-        // Mettre a jour le statut de la sous-commande
-        sousCommande.statut = statut;
-        sousCommande.historiqueStatuts.push({
-            statut,
-            date: new Date(),
-            commentaire,
-            auteur: boutiqueId
-        });
 
         // Si annulation ou rupture, restaurer le stock
         if (statut === 'annulee' || statut === 'rupture') {
-            for (const item of sousCommande.items) {
-                await Produit.findByIdAndUpdate(item.produit, {
-                    $inc: { stock: item.quantite }
-                });
-            }
+            await restaurerStockBoutique(sousCommande.items);
         }
 
-        // Recalculer le statut global
-        const nouveauStatutGlobal = commande.calculerStatutGlobal();
-        if (commande.statut !== nouveauStatutGlobal) {
-            commande.statut = nouveauStatutGlobal;
-            commande.historiqueStatuts.push({
-                statut: nouveauStatutGlobal,
-                date: new Date(),
-                commentaire: 'Mise a jour automatique suite au changement de statut d\'une boutique',
-                auteur: boutiqueId
-            });
-        }
-
+        // Mettre a jour le statut
+        commande.ajouterHistoriqueStatutBoutique(boutiqueId, statut, boutiqueId, commentaire || '');
         await commande.save();
 
         res.status(200).json({
             success: true,
             message: `Statut mis a jour: ${statut}`,
             data: {
-                commande: {
-                    _id: commande._id,
-                    numero: commande.numero,
-                    statutBoutique: statut,
-                    statutGlobal: commande.statut
-                }
+                numero: commande.numero,
+                statut: sousCommande.statut,
+                statutGlobal: commande.statut
             }
         });
 
     } catch (error) {
         console.error('Erreur changerStatut:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de commande invalide.',
+                error: 'INVALID_ID'
+            });
+        }
+
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -550,59 +491,66 @@ const changerStatut = async (req, res) => {
 };
 
 /**
- * @desc    Ajouter une note interne
+ * @desc    Ajouter une note interne a une commande
  * @route   POST /api/boutique/commandes/:id/notes
  * @access  Private (BOUTIQUE)
  */
 const ajouterNote = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
-        const { id } = req.params;
         const { contenu } = req.body;
 
-        const commande = await Commande.findById(id);
+        if (!contenu || !contenu.trim()) {
+            return res.status(COMMANDE_BOUTIQUE_ERRORS.NOTE_REQUIRED.statusCode).json({
+                success: false,
+                message: COMMANDE_BOUTIQUE_ERRORS.NOTE_REQUIRED.message,
+                error: COMMANDE_BOUTIQUE_ERRORS.NOTE_REQUIRED.code
+            });
+        }
+
+        const commande = await Commande.findById(req.params.id);
 
         if (!commande) {
-            return res.status(COMMANDE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
+            return res.status(COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
                 success: false,
-                message: COMMANDE_ERRORS.COMMANDE_NOT_FOUND.message,
-                error: COMMANDE_ERRORS.COMMANDE_NOT_FOUND.code
+                message: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_FOUND.message,
+                error: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_FOUND.code
             });
         }
 
-        // Trouver la sous-commande de cette boutique
-        const sousCommandeIndex = commande.parBoutique.findIndex(
-            sc => sc.boutique.toString() === boutiqueId.toString()
-        );
+        const sousCommande = commande.getSousCommandeBoutique(boutiqueId);
 
-        if (sousCommandeIndex === -1) {
-            return res.status(COMMANDE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
+        if (!sousCommande) {
+            return res.status(COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
                 success: false,
-                message: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.message,
-                error: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.code
+                message: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_OWNER.message,
+                error: COMMANDE_BOUTIQUE_ERRORS.COMMANDE_NOT_OWNER.code
             });
         }
 
-        // Ajouter la note a la sous-commande
-        const nouvelleNote = {
-            contenu,
-            date: new Date(),
-            auteur: boutiqueId
-        };
-
-        commande.parBoutique[sousCommandeIndex].notes.push(nouvelleNote);
+        // Ajouter la note
+        commande.ajouterNoteBoutique(boutiqueId, contenu.trim(), boutiqueId);
         await commande.save();
 
         res.status(201).json({
             success: true,
-            message: 'Note ajoutee avec succes.',
+            message: 'Note ajoutee.',
             data: {
-                note: nouvelleNote
+                notes: sousCommande.notes
             }
         });
 
     } catch (error) {
         console.error('Erreur ajouterNote:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de commande invalide.',
+                error: 'INVALID_ID'
+            });
+        }
+
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -612,11 +560,11 @@ const ajouterNote = async (req, res) => {
 };
 
 module.exports = {
-    listeCommandes,
-    commandesNouvelles,
-    statsCommandes,
-    detailsCommande,
+    getCommandes,
+    getNouvellesCommandes,
+    getStats,
+    getCommandeDetails,
     changerStatut,
     ajouterNote,
-    COMMANDE_ERRORS
+    COMMANDE_BOUTIQUE_ERRORS
 };

@@ -173,7 +173,8 @@ router.get('/', (req, res) => {
           { method: 'PUT', path: '/api/admin/boutiques/:id/suspendre', description: 'Suspendre' },
           { method: 'PUT', path: '/api/admin/boutiques/:id/reactiver', description: 'Reactiver' },
           { method: 'PUT', path: '/api/admin/boutiques/:id/rejeter', description: 'Rejeter' },
-          { method: 'DELETE', path: '/api/admin/boutiques/:id', description: 'Supprimer' }
+          { method: 'DELETE', path: '/api/admin/boutiques/:id', description: 'Supprimer' },
+          { method: 'GET', path: '/api/admin/dashboard/graphiques', description: 'Graphiques dashboard' }
         ]
       },
       categories: {

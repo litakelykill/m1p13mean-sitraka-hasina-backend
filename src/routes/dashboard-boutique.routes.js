@@ -14,7 +14,8 @@ const {
     getStats,
     getAlertesStock,
     getProduitsParCategorie,
-    getResume
+    getResume,
+    getDernieresCommandes
 } = require('../controllers/dashboard-boutique.controller');
 
 // Middlewares
@@ -36,7 +37,7 @@ router.use(checkRole('BOUTIQUE'));
  * @desc    Statistiques globales de la boutique
  * @access  Private (BOUTIQUE)
  * 
- * @returns {Object} Stats produits, stock, commandes (placeholder)
+ * @returns {Object} Stats produits, stock, commandes
  */
 router.get('/', getStats);
 
@@ -45,7 +46,7 @@ router.get('/', getStats);
  * @desc    Resume rapide pour widgets
  * @access  Private (BOUTIQUE)
  * 
- * @returns {Object} Compteurs: produits, actifs, alertes, promos
+ * @returns {Object} Compteurs: produits, actifs, alertes, promos, commandes
  */
 router.get('/resume', getResume);
 
@@ -66,5 +67,16 @@ router.get('/alertes-stock', getAlertesStock);
  * @returns {Object} Comptage produits par categorie avec valeur stock
  */
 router.get('/produits-par-categorie', getProduitsParCategorie);
+
+/**
+ * @route   GET /api/boutique/dashboard/dernieres-commandes
+ * @desc    Dernieres commandes recues
+ * @access  Private (BOUTIQUE)
+ * 
+ * @query {Number} [limit=5] - Nombre de commandes a retourner
+ * 
+ * @returns {Object} Liste des dernieres commandes
+ */
+router.get('/dernieres-commandes', getDernieresCommandes);
 
 module.exports = router;

@@ -7,6 +7,7 @@
  */
 
 const Produit = require('../models/Produit');
+const Commande = require('../models/Commande');
 const Categorie = require('../models/Categorie');
 
 /**
@@ -17,6 +18,10 @@ const Categorie = require('../models/Categorie');
 const getStats = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
+
+        const now = new Date();
+        const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
 
         // Stats produits
         const [
@@ -52,6 +57,74 @@ const getStats = async (req, res) => {
 
         const valeurStock = valeurStockResult[0] || { valeurTotale: 0, stockTotal: 0 };
 
+        // Stats commandes
+        let statsCommandes = {
+            enAttente: 0,
+            duJour: 0,
+            caJour: 0,
+            caMois: 0
+        };
+
+        try {
+            const commandesStats = await Commande.aggregate([
+                {
+                    $match: { 'parBoutique.boutique': boutiqueId }
+                },
+                { $unwind: '$parBoutique' },
+                { $match: { 'parBoutique.boutique': boutiqueId } },
+                {
+                    $facet: {
+                        enAttente: [
+                            { $match: { 'parBoutique.statut': 'en_attente' } },
+                            { $count: 'count' }
+                        ],
+                        jour: [
+                            {
+                                $match: {
+                                    createdAt: { $gte: debutJour },
+                                    'parBoutique.statut': { $nin: ['annulee', 'rupture'] }
+                                }
+                            },
+                            {
+                                $group: {
+                                    _id: null,
+                                    count: { $sum: 1 },
+                                    ca: { $sum: '$parBoutique.sousTotal' }
+                                }
+                            }
+                        ],
+                        mois: [
+                            {
+                                $match: {
+                                    createdAt: { $gte: debutMois },
+                                    'parBoutique.statut': { $nin: ['annulee', 'rupture'] }
+                                }
+                            },
+                            {
+                                $group: {
+                                    _id: null,
+                                    ca: { $sum: '$parBoutique.sousTotal' }
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]);
+
+            if (commandesStats[0]) {
+                const cs = commandesStats[0];
+                statsCommandes = {
+                    enAttente: cs.enAttente[0]?.count || 0,
+                    duJour: cs.jour[0]?.count || 0,
+                    caJour: cs.jour[0]?.ca || 0,
+                    caMois: cs.mois[0]?.ca || 0
+                };
+            }
+        } catch (err) {
+            // Si le modele Commande n'existe pas encore, on garde les valeurs par defaut
+            console.log('Stats commandes non disponibles:', err.message);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Statistiques du dashboard recuperees.',
@@ -70,14 +143,7 @@ const getStats = async (req, res) => {
                         valeurTotale: valeurStock.valeurTotale
                     }
                 },
-                // Placeholder pour futures stats commandes
-                commandes: {
-                    message: 'Statistiques commandes disponibles prochainement',
-                    enAttente: 0,
-                    duJour: 0,
-                    caJour: 0,
-                    caMois: 0
-                }
+                commandes: statsCommandes
             }
         });
 
@@ -242,6 +308,10 @@ const getResume = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
 
+        const now = new Date();
+        const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
+
         const [total, actifs, stockFaible, enRupture, enPromo] = await Promise.all([
             Produit.countDocuments({ boutique: boutiqueId }),
             Produit.countDocuments({ boutique: boutiqueId, isActive: true }),
@@ -253,13 +323,50 @@ const getResume = async (req, res) => {
             Produit.countDocuments({ boutique: boutiqueId, enPromo: true })
         ]);
 
+        // Stats commandes pour resume
+        let commandesEnAttente = 0;
+        let commandesJour = 0;
+        let caJour = 0;
+        let caMois = 0;
+
+        try {
+            const [enAttenteCount, statsJour, statsMois] = await Promise.all([
+                Commande.countDocuments({
+                    'parBoutique': { $elemMatch: { boutique: boutiqueId, statut: 'en_attente' } }
+                }),
+                Commande.aggregate([
+                    { $match: { 'parBoutique.boutique': boutiqueId, createdAt: { $gte: debutJour } } },
+                    { $unwind: '$parBoutique' },
+                    { $match: { 'parBoutique.boutique': boutiqueId, 'parBoutique.statut': { $nin: ['annulee', 'rupture'] } } },
+                    { $group: { _id: null, count: { $sum: 1 }, montant: { $sum: '$parBoutique.sousTotal' } } }
+                ]),
+                Commande.aggregate([
+                    { $match: { 'parBoutique.boutique': boutiqueId, createdAt: { $gte: debutMois } } },
+                    { $unwind: '$parBoutique' },
+                    { $match: { 'parBoutique.boutique': boutiqueId, 'parBoutique.statut': { $nin: ['annulee', 'rupture'] } } },
+                    { $group: { _id: null, montant: { $sum: '$parBoutique.sousTotal' } } }
+                ])
+            ]);
+
+            commandesEnAttente = enAttenteCount;
+            commandesJour = statsJour[0]?.count || 0;
+            caJour = statsJour[0]?.montant || 0;
+            caMois = statsMois[0]?.montant || 0;
+        } catch (err) {
+            console.log('Stats commandes non disponibles:', err.message);
+        }
+
         res.status(200).json({
             success: true,
             data: {
                 produits: total,
                 actifs: actifs,
                 alertes: stockFaible + enRupture,
-                promos: enPromo
+                promos: enPromo,
+                commandesEnAttente,
+                commandesJour,
+                caJour,
+                caMois
             }
         });
 
@@ -273,9 +380,65 @@ const getResume = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Dernieres commandes
+ * @route   GET /api/boutique/dashboard/dernieres-commandes
+ * @access  Private (BOUTIQUE)
+ */
+const getDernieresCommandes = async (req, res) => {
+    try {
+        const boutiqueId = req.user._id;
+        const { limit = 5 } = req.query;
+
+        const commandes = await Commande.find({
+            'parBoutique.boutique': boutiqueId
+        })
+            .sort({ createdAt: -1 })
+            .limit(parseInt(limit))
+            .populate('client', 'nom prenom')
+            .lean();
+
+        const commandesFormatees = commandes.map(cmd => {
+            const sousCommande = cmd.parBoutique.find(
+                sc => sc.boutique.toString() === boutiqueId.toString()
+            );
+
+            return {
+                _id: cmd._id,
+                numero: cmd.numero,
+                client: {
+                    nom: cmd.client?.nom,
+                    prenom: cmd.client?.prenom
+                },
+                statut: sousCommande?.statut || cmd.statut,
+                sousTotal: sousCommande?.sousTotal || 0,
+                itemsCount: sousCommande?.items.reduce((sum, i) => sum + i.quantite, 0) || 0,
+                createdAt: cmd.createdAt
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Dernieres commandes recuperees.',
+            data: {
+                commandes: commandesFormatees
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur getDernieresCommandes:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
 module.exports = {
     getStats,
     getAlertesStock,
     getProduitsParCategorie,
-    getResume
+    getResume,
+    getDernieresCommandes
 };

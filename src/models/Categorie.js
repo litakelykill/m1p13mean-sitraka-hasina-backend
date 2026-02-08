@@ -52,6 +52,7 @@ const categorieSchema = new mongoose.Schema({
         trim: true,
         maxlength: [500, 'La description ne peut pas depasser 500 caracteres']
     },
+    // ordre d'affichage des catégories dans l'interface
     ordre: {
         type: Number,
         default: 0

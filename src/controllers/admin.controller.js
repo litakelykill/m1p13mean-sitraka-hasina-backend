@@ -10,6 +10,8 @@
  */
 
 const User = require('../models/User');
+const Produit = require('../models/Produit');
+const Commande = require('../models/Commande');
 const { deleteLocalFile } = require('../config/multer');
 
 // ============================================
@@ -105,6 +107,13 @@ const getPagination = (query) => {
  */
 const getDashboardStats = async (req, res) => {
     try {
+        // Dates pour les stats temporelles
+        const now = new Date();
+        const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const debutSemaine = new Date(debutJour);
+        debutSemaine.setDate(debutSemaine.getDate() - debutSemaine.getDay());
+        const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
+
         // Executer toutes les requetes en parallele
         const [
             totalBoutiques,
@@ -112,44 +121,74 @@ const getDashboardStats = async (req, res) => {
             boutiquesValidees,
             boutiquesSuspendues,
             totalClients,
-            totalAdmins
+            totalAdmins,
+            boutiquesRejetees,
+            // Stats produits
+            totalProduits,
+            produitsActifs,
+            produitsEnPromo,
+            produitsEnRupture,
+            // Stats commandes
+            totalCommandes,
+            commandesEnAttente,
+            commandesConfirmees,
+            commandesLivrees,
+            commandesAnnulees,
+            // Stats CA
+            statsCA,
+            statsCAJour,
+            statsCAMois
         ] = await Promise.all([
-            // Total boutiques
+            // Boutiques
             User.countDocuments({ role: 'BOUTIQUE' }),
-
-            // Boutiques en attente (non validees et actives)
             User.countDocuments({
                 role: 'BOUTIQUE',
                 'boutique.isValidated': false,
                 isActive: true,
                 'boutique.rejectedReason': null
             }),
-
-            // Boutiques validees et actives
             User.countDocuments({
                 role: 'BOUTIQUE',
                 'boutique.isValidated': true,
                 isActive: true
             }),
-
-            // Boutiques suspendues
             User.countDocuments({
                 role: 'BOUTIQUE',
                 isActive: false
             }),
-
-            // Total clients
             User.countDocuments({ role: 'CLIENT' }),
-
-            // Total admins
-            User.countDocuments({ role: 'ADMIN' })
+            User.countDocuments({ role: 'ADMIN' }),
+            User.countDocuments({
+                role: 'BOUTIQUE',
+                'boutique.rejectedReason': { $ne: null }
+            }),
+            // Produits
+            Produit.countDocuments({}),
+            Produit.countDocuments({ isActive: true }),
+            Produit.countDocuments({ isActive: true, enPromo: true }),
+            Produit.countDocuments({ isActive: true, stock: 0 }),
+            // Commandes
+            Commande.countDocuments({}),
+            Commande.countDocuments({ statut: 'en_attente' }),
+            Commande.countDocuments({ statut: { $in: ['confirmee', 'en_preparation', 'expediee'] } }),
+            Commande.countDocuments({ statut: 'livree' }),
+            Commande.countDocuments({ statut: 'annulee' }),
+            // CA total
+            Commande.aggregate([
+                { $match: { statut: { $nin: ['annulee', 'rupture'] } } },
+                { $group: { _id: null, total: { $sum: '$total' } } }
+            ]),
+            // CA jour
+            Commande.aggregate([
+                { $match: { statut: { $nin: ['annulee', 'rupture'] }, createdAt: { $gte: debutJour } } },
+                { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } }
+            ]),
+            // CA mois
+            Commande.aggregate([
+                { $match: { statut: { $nin: ['annulee', 'rupture'] }, createdAt: { $gte: debutMois } } },
+                { $group: { _id: null, total: { $sum: '$total' }, count: { $sum: 1 } } }
+            ])
         ]);
-
-        // Boutiques rejetees
-        const boutiquesRejetees = await User.countDocuments({
-            role: 'BOUTIQUE',
-            'boutique.rejectedReason': { $ne: null }
-        });
 
         res.status(200).json({
             success: true,
@@ -166,7 +205,28 @@ const getDashboardStats = async (req, res) => {
                     utilisateurs: {
                         clients: totalClients,
                         admins: totalAdmins,
+                        boutiques: totalBoutiques,
                         total: totalBoutiques + totalClients + totalAdmins
+                    },
+                    produits: {
+                        total: totalProduits,
+                        actifs: produitsActifs,
+                        enPromo: produitsEnPromo,
+                        enRupture: produitsEnRupture
+                    },
+                    commandes: {
+                        total: totalCommandes,
+                        enAttente: commandesEnAttente,
+                        enCours: commandesConfirmees,
+                        livrees: commandesLivrees,
+                        annulees: commandesAnnulees
+                    },
+                    chiffreAffaires: {
+                        total: statsCA[0]?.total || 0,
+                        jour: statsCAJour[0]?.total || 0,
+                        mois: statsCAMois[0]?.total || 0,
+                        commandesJour: statsCAJour[0]?.count || 0,
+                        commandesMois: statsCAMois[0]?.count || 0
                     }
                 }
             }
@@ -810,8 +870,217 @@ const deleteBoutique = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Recuperer les donnees pour les graphiques du dashboard
+ * @route   GET /api/admin/dashboard/graphiques
+ * @access  Private (ADMIN)
+ */
+const getDashboardGraphiques = async (req, res) => {
+    try {
+        const { periode = '7jours' } = req.query;
+
+        // Determiner la plage de dates
+        const now = new Date();
+        let dateDebut;
+        let groupBy;
+
+        switch (periode) {
+            case '30jours':
+                dateDebut = new Date(now);
+                dateDebut.setDate(dateDebut.getDate() - 30);
+                groupBy = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+                break;
+            case '12mois':
+                dateDebut = new Date(now);
+                dateDebut.setMonth(dateDebut.getMonth() - 12);
+                groupBy = { $dateToString: { format: '%Y-%m', date: '$createdAt' } };
+                break;
+            case '7jours':
+            default:
+                dateDebut = new Date(now);
+                dateDebut.setDate(dateDebut.getDate() - 7);
+                groupBy = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+                break;
+        }
+
+        // Commandes par jour/mois
+        const commandesParPeriode = await Commande.aggregate([
+            { $match: { createdAt: { $gte: dateDebut } } },
+            {
+                $group: {
+                    _id: groupBy,
+                    commandes: { $sum: 1 },
+                    ca: {
+                        $sum: {
+                            $cond: [{
+                                $and: [
+                                    { $ne: ['$statut', 'annulee'] },
+                                    { $ne: ['$statut', 'rupture'] }
+                                ]
+                            }, '$total', 0]
+                        }
+                    },
+                    livrees: { $sum: { $cond: [{ $eq: ['$statut', 'livree'] }, 1, 0] } },
+                    annulees: { $sum: { $cond: [{ $eq: ['$statut', 'annulee'] }, 1, 0] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // Inscriptions par jour/mois
+        const inscriptionsParPeriode = await User.aggregate([
+            { $match: { createdAt: { $gte: dateDebut } } },
+            {
+                $group: {
+                    _id: {
+                        date: groupBy,
+                        role: '$role'
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id.date': 1 } }
+        ]);
+
+        // Formatter inscriptions par role
+        const inscriptionsFormatted = {};
+        inscriptionsParPeriode.forEach(item => {
+            const date = item._id.date;
+            const role = item._id.role;
+            if (!inscriptionsFormatted[date]) {
+                inscriptionsFormatted[date] = { date, clients: 0, boutiques: 0 };
+            }
+            if (role === 'CLIENT') inscriptionsFormatted[date].clients = item.count;
+            if (role === 'BOUTIQUE') inscriptionsFormatted[date].boutiques = item.count;
+        });
+
+        // Repartition produits par categorie
+        const produitsParCategorie = await Produit.aggregate([
+            { $match: { isActive: true } },
+            {
+                $lookup: {
+                    from: 'categories',
+                    localField: 'categorie',
+                    foreignField: '_id',
+                    as: 'categorieInfo'
+                }
+            },
+            { $unwind: { path: '$categorieInfo', preserveNullAndEmptyArrays: true } },
+            {
+                $group: {
+                    _id: '$categorieInfo.nom',
+                    count: { $sum: 1 },
+                    valeurStock: { $sum: { $multiply: ['$prix', '$stock'] } }
+                }
+            },
+            { $sort: { count: -1 } },
+            { $limit: 10 }
+        ]);
+
+        // Top boutiques par CA
+        const topBoutiquesCA = await Commande.aggregate([
+            { $match: { statut: { $nin: ['annulee', 'rupture'] } } },
+            { $unwind: '$parBoutique' },
+            {
+                $group: {
+                    _id: '$parBoutique.boutique',
+                    ca: { $sum: '$parBoutique.total' },
+                    commandes: { $sum: 1 }
+                }
+            },
+            { $sort: { ca: -1 } },
+            { $limit: 10 },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'boutiqueInfo'
+                }
+            },
+            { $unwind: '$boutiqueInfo' },
+            {
+                $project: {
+                    _id: 1,
+                    ca: 1,
+                    commandes: 1,
+                    nomBoutique: '$boutiqueInfo.boutique.nomBoutique'
+                }
+            }
+        ]);
+
+        // Repartition commandes par statut
+        const commandesParStatut = await Commande.aggregate([
+            {
+                $group: {
+                    _id: '$statut',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Repartition boutiques par statut
+        const boutiquesParStatut = await User.aggregate([
+            { $match: { role: 'BOUTIQUE' } },
+            {
+                $project: {
+                    statut: {
+                        $switch: {
+                            branches: [
+                                { case: { $eq: ['$isActive', false] }, then: 'suspendues' },
+                                { case: { $ne: ['$boutique.rejectedReason', null] }, then: 'rejetees' },
+                                { case: { $eq: ['$boutique.isValidated', true] }, then: 'validees' }
+                            ],
+                            default: 'en_attente'
+                        }
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: '$statut',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            message: 'Donnees graphiques recuperees.',
+            data: {
+                periode,
+                commandesParPeriode,
+                inscriptionsParPeriode: Object.values(inscriptionsFormatted),
+                produitsParCategorie: produitsParCategorie.map(p => ({
+                    categorie: p._id || 'Sans categorie',
+                    count: p.count,
+                    valeurStock: p.valeurStock
+                })),
+                topBoutiquesCA,
+                commandesParStatut: commandesParStatut.map(c => ({
+                    statut: c._id,
+                    count: c.count
+                })),
+                boutiquesParStatut: boutiquesParStatut.map(b => ({
+                    statut: b._id,
+                    count: b.count
+                }))
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur getDashboardGraphiques:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
 module.exports = {
     getDashboardStats,
+    getDashboardGraphiques,
     getBoutiquesEnAttente,
     getBoutiquesValidees,
     getBoutiquesSuspendues,

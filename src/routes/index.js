@@ -17,9 +17,11 @@ const adminRoutes = require('./admin.routes');
 const boutiqueRoutes = require('./boutique.routes');
 const categorieRoutes = require('./categorie.routes');
 const produitRoutes = require('./produit.routes');
-
-// Routes client (a implementer)
-// const clientRoutes = require('./client.routes');
+const dashboardBoutiqueRoutes = require('./dashboard-boutique.routes');
+const catalogueRoutes = require('./catalogue.routes');
+const panierRoutes = require('./panier.routes');
+const commandeClientRoutes = require('./commande-client.routes');
+const commandeBoutiqueRoutes = require('./commande-boutique.routes');
 
 // ============================================
 // MONTAGE DES ROUTES
@@ -60,18 +62,46 @@ router.use('/boutique', boutiqueRoutes);
 router.use('/boutique/produits', produitRoutes);
 
 /**
- * Routes client
- * Prefixe : /api/client
- * Acces : PUBLIC et CLIENT
+ * Routes dashboard boutique
+ * Prefixe : /api/boutique/dashboard
+ * Acces : BOUTIQUE uniquement
  */
-// router.use('/client', clientRoutes);
+router.use('/boutique/dashboard', dashboardBoutiqueRoutes);
+
+/**
+ * Routes catalogue
+ * Prefixe : /api/catalogue
+ * Acces : PUBLIC (pas d'authentification requise)
+ */
+router.use('/catalogue', catalogueRoutes);
+
+/**
+ * Routes panier
+ * Prefixe : /api/panier
+ * Acces : CLIENT uniquement
+ */
+router.use('/panier', panierRoutes);
+
+/**
+ * Routes commandes client
+ * Prefixe : /api/commandes
+ * Acces : CLIENT uniquement
+ */
+router.use('/commandes', commandeClientRoutes);
+
+/**
+ * Routes commandes boutique
+ * Prefixe : /api/boutique/commandes
+ * Acces : BOUTIQUE uniquement
+ */
+router.use('/boutique/commandes', commandeBoutiqueRoutes);
 
 // ============================================
 // ROUTE DE CONFIGURATION (pour frontend)
 // ============================================
 router.get('/config', (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  
+
   res.status(200).json({
     success: true,
     data: {
@@ -107,14 +137,15 @@ router.get('/config', (req, res) => {
 
 /**
  * @route   GET /api
- * @desc    Documentation de l'API - Liste des endpoints disponibles
+ * @desc    Documentation de l'API
  * @access  Public
  */
 router.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'API Centre Commercial - Documentation',
-    version: '1.2.0',
+    version: '1.3.0',
+    totalRoutes: 81,
     endpoints: {
       auth: {
         description: 'Authentification et gestion utilisateurs',
@@ -133,6 +164,7 @@ router.get('/', (req, res) => {
         description: 'Administration (ADMIN only)',
         routes: [
           { method: 'GET', path: '/api/admin/dashboard', description: 'Statistiques globales' },
+          { method: 'GET', path: '/api/admin/dashboard/graphiques', description: 'Donnees pour graphiques' },
           { method: 'GET', path: '/api/admin/boutiques/en-attente', description: 'Boutiques en attente' },
           { method: 'GET', path: '/api/admin/boutiques/validees', description: 'Boutiques validees' },
           { method: 'GET', path: '/api/admin/boutiques/suspendues', description: 'Boutiques suspendues' },
@@ -191,14 +223,61 @@ router.get('/', (req, res) => {
           { method: 'DELETE', path: '/api/boutique/produits/:id/images/:filename', description: 'Supprimer image galerie' }
         ]
       },
-      client: {
-        description: 'Interface client',
-        status: 'A implementer',
+      dashboardBoutique: {
+        description: 'Tableau de bord boutique (BOUTIQUE only)',
         routes: [
-          { method: 'GET', path: '/api/client/boutiques', description: 'Liste boutiques' },
-          { method: 'GET', path: '/api/client/produits', description: 'Catalogue produits' },
-          { method: 'GET', path: '/api/client/panier', description: 'Mon panier' },
-          { method: 'POST', path: '/api/client/commandes', description: 'Passer commande' }
+          { method: 'GET', path: '/api/boutique/dashboard', description: 'Stats globales (produits, commandes, CA)' },
+          { method: 'GET', path: '/api/boutique/dashboard/resume', description: 'Resume rapide (widgets)' },
+          { method: 'GET', path: '/api/boutique/dashboard/alertes-stock', description: 'Alertes stock' },
+          { method: 'GET', path: '/api/boutique/dashboard/produits-par-categorie', description: 'Repartition par categorie' },
+          { method: 'GET', path: '/api/boutique/dashboard/dernieres-commandes', description: 'Dernieres commandes' },
+          { method: 'GET', path: '/api/boutique/dashboard/graphique-ventes', description: 'Donnees graphique ventes' }
+        ]
+      },
+      catalogue: {
+        description: 'Catalogue produits et boutiques (PUBLIC)',
+        routes: [
+          { method: 'GET', path: '/api/catalogue/produits', description: 'Liste produits avec filtres' },
+          { method: 'GET', path: '/api/catalogue/produits/:id', description: 'Details produit par ID' },
+          { method: 'GET', path: '/api/catalogue/produits/slug/:slug', description: 'Details produit par slug' },
+          { method: 'GET', path: '/api/catalogue/categories', description: 'Categories produits avec comptage' },
+          { method: 'GET', path: '/api/catalogue/boutiques', description: 'Liste boutiques avec filtres' },
+          { method: 'GET', path: '/api/catalogue/boutiques/categories', description: 'Categories de boutiques' },
+          { method: 'GET', path: '/api/catalogue/boutiques/:id', description: 'Details boutique' },
+          { method: 'GET', path: '/api/catalogue/boutiques/:id/produits', description: 'Produits d\'une boutique' }
+        ]
+      },
+      panier: {
+        description: 'Panier client (CLIENT only)',
+        routes: [
+          { method: 'GET', path: '/api/panier', description: 'Voir le panier complet' },
+          { method: 'GET', path: '/api/panier/count', description: 'Nombre d\'articles (badge)' },
+          { method: 'GET', path: '/api/panier/verify', description: 'Verifier validite du panier' },
+          { method: 'POST', path: '/api/panier/items', description: 'Ajouter un produit' },
+          { method: 'PUT', path: '/api/panier/items/:produitId', description: 'Modifier quantite' },
+          { method: 'DELETE', path: '/api/panier/items/:produitId', description: 'Retirer un produit' },
+          { method: 'DELETE', path: '/api/panier', description: 'Vider le panier' }
+        ]
+      },
+      commandesClient: {
+        description: 'Commandes client (CLIENT only)',
+        routes: [
+          { method: 'POST', path: '/api/commandes', description: 'Passer une commande' },
+          { method: 'GET', path: '/api/commandes', description: 'Liste des commandes' },
+          { method: 'GET', path: '/api/commandes/:id', description: 'Details commande' },
+          { method: 'GET', path: '/api/commandes/:id/suivi', description: 'Suivi de livraison' },
+          { method: 'PUT', path: '/api/commandes/:id/annuler', description: 'Annuler commande' }
+        ]
+      },
+      commandesBoutique: {
+        description: 'Commandes boutique (BOUTIQUE only)',
+        routes: [
+          { method: 'GET', path: '/api/boutique/commandes', description: 'Liste des commandes recues' },
+          { method: 'GET', path: '/api/boutique/commandes/nouvelles', description: 'Commandes en attente' },
+          { method: 'GET', path: '/api/boutique/commandes/stats', description: 'Statistiques commandes' },
+          { method: 'GET', path: '/api/boutique/commandes/:id', description: 'Details commande' },
+          { method: 'PUT', path: '/api/boutique/commandes/:id/statut', description: 'Changer statut' },
+          { method: 'POST', path: '/api/boutique/commandes/:id/notes', description: 'Ajouter note' }
         ]
       }
     },

@@ -13,6 +13,7 @@ const router = express.Router();
 // Controllers
 const {
     getDashboardStats,
+    getDashboardGraphiques,
     getBoutiquesEnAttente,
     getBoutiquesValidees,
     getBoutiquesSuspendues,
@@ -55,12 +56,33 @@ router.use(checkRole('ADMIN'));
  *   data: {
  *     stats: {
  *       boutiques: { total, enAttente, validees, suspendues, rejetees },
- *       utilisateurs: { clients, admins, total }
+ *       utilisateurs: { clients, admins, boutiques, total },
+ *       produits: { total, actifs, enPromo, enRupture },
+ *       commandes: { total, enAttente, enCours, livrees, annulees },
+ *       chiffreAffaires: { total, jour, mois, commandesJour, commandesMois }
  *     }
  *   }
  * }
  */
 router.get('/dashboard', getDashboardStats);
+
+/**
+ * @route   GET /api/admin/dashboard/graphiques
+ * @desc    Recuperer les donnees pour les graphiques
+ * @access  Private (ADMIN)
+ * 
+ * @query   periode (optional) - 7jours, 30jours, 12mois (default: 7jours)
+ * 
+ * @returns {
+ *   commandesParPeriode: [{ _id: date, commandes, ca, livrees, annulees }],
+ *   inscriptionsParPeriode: [{ date, clients, boutiques }],
+ *   produitsParCategorie: [{ categorie, count, valeurStock }],
+ *   topBoutiquesCA: [{ _id, nomBoutique, ca, commandes }],
+ *   commandesParStatut: [{ statut, count }],
+ *   boutiquesParStatut: [{ statut, count }]
+ * }
+ */
+router.get('/dashboard/graphiques', getDashboardGraphiques);
 
 // ============================================
 // ROUTES LISTES BOUTIQUES

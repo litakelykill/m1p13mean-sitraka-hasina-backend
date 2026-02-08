@@ -107,7 +107,7 @@ router.get('/config', (req, res) => {
     data: {
       api: {
         baseUrl: baseUrl,
-        version: '1.3.0'
+        version: '1.2.0'
       },
       uploads: {
         baseUrl: `${baseUrl}/uploads`,
@@ -164,6 +164,7 @@ router.get('/', (req, res) => {
         description: 'Administration (ADMIN only)',
         routes: [
           { method: 'GET', path: '/api/admin/dashboard', description: 'Statistiques globales' },
+          { method: 'GET', path: '/api/admin/dashboard/graphiques', description: 'Donnees pour graphiques' },
           { method: 'GET', path: '/api/admin/boutiques/en-attente', description: 'Boutiques en attente' },
           { method: 'GET', path: '/api/admin/boutiques/validees', description: 'Boutiques validees' },
           { method: 'GET', path: '/api/admin/boutiques/suspendues', description: 'Boutiques suspendues' },
@@ -173,8 +174,7 @@ router.get('/', (req, res) => {
           { method: 'PUT', path: '/api/admin/boutiques/:id/suspendre', description: 'Suspendre' },
           { method: 'PUT', path: '/api/admin/boutiques/:id/reactiver', description: 'Reactiver' },
           { method: 'PUT', path: '/api/admin/boutiques/:id/rejeter', description: 'Rejeter' },
-          { method: 'DELETE', path: '/api/admin/boutiques/:id', description: 'Supprimer' },
-          { method: 'GET', path: '/api/admin/dashboard/graphiques', description: 'Graphiques dashboard' }
+          { method: 'DELETE', path: '/api/admin/boutiques/:id', description: 'Supprimer' }
         ]
       },
       categories: {
@@ -226,10 +226,12 @@ router.get('/', (req, res) => {
       dashboardBoutique: {
         description: 'Tableau de bord boutique (BOUTIQUE only)',
         routes: [
-          { method: 'GET', path: '/api/boutique/dashboard', description: 'Stats globales' },
+          { method: 'GET', path: '/api/boutique/dashboard', description: 'Stats globales (produits, commandes, CA)' },
           { method: 'GET', path: '/api/boutique/dashboard/resume', description: 'Resume rapide (widgets)' },
           { method: 'GET', path: '/api/boutique/dashboard/alertes-stock', description: 'Alertes stock' },
-          { method: 'GET', path: '/api/boutique/dashboard/produits-par-categorie', description: 'Repartition par categorie' }
+          { method: 'GET', path: '/api/boutique/dashboard/produits-par-categorie', description: 'Repartition par categorie' },
+          { method: 'GET', path: '/api/boutique/dashboard/dernieres-commandes', description: 'Dernieres commandes' },
+          { method: 'GET', path: '/api/boutique/dashboard/graphique-ventes', description: 'Donnees graphique ventes' }
         ]
       },
       catalogue: {

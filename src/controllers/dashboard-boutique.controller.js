@@ -6,9 +6,10 @@
  * @module controllers/dashboard-boutique.controller
  */
 
+const mongoose = require('mongoose');
 const Produit = require('../models/Produit');
-const Commande = require('../models/Commande');
 const Categorie = require('../models/Categorie');
+const Commande = require('../models/Commande');
 
 /**
  * @desc    Recuperer les statistiques globales de la boutique
@@ -19,9 +20,12 @@ const getStats = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
 
+        // Dates pour les stats temporelles
         const now = new Date();
-        const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
+        const debutSemaine = new Date(debutJour);
+        debutSemaine.setDate(debutSemaine.getDate() - debutSemaine.getDay());
 
         // Stats produits
         const [
@@ -57,73 +61,107 @@ const getStats = async (req, res) => {
 
         const valeurStock = valeurStockResult[0] || { valeurTotale: 0, stockTotal: 0 };
 
-        // Stats commandes
-        let statsCommandes = {
-            enAttente: 0,
-            duJour: 0,
-            caJour: 0,
-            caMois: 0
-        };
-
-        try {
-            const commandesStats = await Commande.aggregate([
-                {
-                    $match: { 'parBoutique.boutique': boutiqueId }
-                },
-                { $unwind: '$parBoutique' },
-                { $match: { 'parBoutique.boutique': boutiqueId } },
-                {
-                    $facet: {
-                        enAttente: [
-                            { $match: { 'parBoutique.statut': 'en_attente' } },
-                            { $count: 'count' }
-                        ],
-                        jour: [
-                            {
-                                $match: {
-                                    createdAt: { $gte: debutJour },
-                                    'parBoutique.statut': { $nin: ['annulee', 'rupture'] }
-                                }
-                            },
-                            {
-                                $group: {
-                                    _id: null,
-                                    count: { $sum: 1 },
-                                    ca: { $sum: '$parBoutique.sousTotal' }
-                                }
-                            }
-                        ],
-                        mois: [
-                            {
-                                $match: {
-                                    createdAt: { $gte: debutMois },
-                                    'parBoutique.statut': { $nin: ['annulee', 'rupture'] }
-                                }
-                            },
-                            {
-                                $group: {
-                                    _id: null,
-                                    ca: { $sum: '$parBoutique.sousTotal' }
-                                }
-                            }
-                        ]
+        // Stats commandes boutique
+        const commandesStats = await Commande.aggregate([
+            { $match: { 'parBoutique.boutique': boutiqueId } },
+            { $unwind: '$parBoutique' },
+            { $match: { 'parBoutique.boutique': boutiqueId } },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: 1 },
+                    enAttente: { $sum: { $cond: [{ $eq: ['$parBoutique.statut', 'en_attente'] }, 1, 0] } },
+                    confirmees: { $sum: { $cond: [{ $eq: ['$parBoutique.statut', 'confirmee'] }, 1, 0] } },
+                    enPreparation: { $sum: { $cond: [{ $eq: ['$parBoutique.statut', 'en_preparation'] }, 1, 0] } },
+                    expediees: { $sum: { $cond: [{ $eq: ['$parBoutique.statut', 'expediee'] }, 1, 0] } },
+                    livrees: { $sum: { $cond: [{ $eq: ['$parBoutique.statut', 'livree'] }, 1, 0] } },
+                    annulees: { $sum: { $cond: [{ $eq: ['$parBoutique.statut', 'annulee'] }, 1, 0] } },
+                    caTotal: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ne: ['$parBoutique.statut', 'annulee'] },
+                                        { $ne: ['$parBoutique.statut', 'rupture'] }
+                                    ]
+                                },
+                                '$parBoutique.total',
+                                0
+                            ]
+                        }
                     }
                 }
-            ]);
-
-            if (commandesStats[0]) {
-                const cs = commandesStats[0];
-                statsCommandes = {
-                    enAttente: cs.enAttente[0]?.count || 0,
-                    duJour: cs.jour[0]?.count || 0,
-                    caJour: cs.jour[0]?.ca || 0,
-                    caMois: cs.mois[0]?.ca || 0
-                };
             }
-        } catch (err) {
-            // Si le modele Commande n'existe pas encore, on garde les valeurs par defaut
-            console.log('Stats commandes non disponibles:', err.message);
-        }
+        ]);
+
+        // Stats commandes du jour
+        const commandesJour = await Commande.aggregate([
+            {
+                $match: {
+                    'parBoutique.boutique': boutiqueId,
+                    createdAt: { $gte: debutJour }
+                }
+            },
+            { $unwind: '$parBoutique' },
+            { $match: { 'parBoutique.boutique': boutiqueId } },
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: 1 },
+                    ca: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ne: ['$parBoutique.statut', 'annulee'] },
+                                        { $ne: ['$parBoutique.statut', 'rupture'] }
+                                    ]
+                                },
+                                '$parBoutique.total',
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        // Stats commandes du mois
+        const commandesMois = await Commande.aggregate([
+            {
+                $match: {
+                    'parBoutique.boutique': boutiqueId,
+                    createdAt: { $gte: debutMois }
+                }
+            },
+            { $unwind: '$parBoutique' },
+            { $match: { 'parBoutique.boutique': boutiqueId } },
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: 1 },
+                    ca: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ne: ['$parBoutique.statut', 'annulee'] },
+                                        { $ne: ['$parBoutique.statut', 'rupture'] }
+                                    ]
+                                },
+                                '$parBoutique.total',
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        const stats = commandesStats[0] || {
+            total: 0, enAttente: 0, confirmees: 0, enPreparation: 0,
+            expediees: 0, livrees: 0, annulees: 0, caTotal: 0
+        };
 
         res.status(200).json({
             success: true,
@@ -141,9 +179,30 @@ const getStats = async (req, res) => {
                     stock: {
                         quantiteTotale: valeurStock.stockTotal,
                         valeurTotale: valeurStock.valeurTotale
+                    },
+                    commandes: {
+                        total: stats.total,
+                        enAttente: stats.enAttente,
+                        enCours: stats.confirmees + stats.enPreparation + stats.expediees,
+                        livrees: stats.livrees,
+                        annulees: stats.annulees,
+                        parStatut: {
+                            en_attente: stats.enAttente,
+                            confirmee: stats.confirmees,
+                            en_preparation: stats.enPreparation,
+                            expediee: stats.expediees,
+                            livree: stats.livrees,
+                            annulee: stats.annulees
+                        }
+                    },
+                    chiffreAffaires: {
+                        total: stats.caTotal,
+                        jour: commandesJour[0]?.ca || 0,
+                        mois: commandesMois[0]?.ca || 0,
+                        commandesJour: commandesJour[0]?.count || 0,
+                        commandesMois: commandesMois[0]?.count || 0
                     }
-                },
-                commandes: statsCommandes
+                }
             }
         });
 
@@ -308,10 +367,7 @@ const getResume = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
 
-        const now = new Date();
-        const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-        const debutMois = new Date(now.getFullYear(), now.getMonth(), 1);
-
+        // Stats produits
         const [total, actifs, stockFaible, enRupture, enPromo] = await Promise.all([
             Produit.countDocuments({ boutique: boutiqueId }),
             Produit.countDocuments({ boutique: boutiqueId, isActive: true }),
@@ -323,38 +379,49 @@ const getResume = async (req, res) => {
             Produit.countDocuments({ boutique: boutiqueId, enPromo: true })
         ]);
 
-        // Stats commandes pour resume
-        let commandesEnAttente = 0;
-        let commandesJour = 0;
-        let caJour = 0;
-        let caMois = 0;
+        // Commandes en attente
+        const commandesEnAttente = await Commande.countDocuments({
+            'parBoutique': {
+                $elemMatch: {
+                    boutique: boutiqueId,
+                    statut: 'en_attente'
+                }
+            }
+        });
 
-        try {
-            const [enAttenteCount, statsJour, statsMois] = await Promise.all([
-                Commande.countDocuments({
-                    'parBoutique': { $elemMatch: { boutique: boutiqueId, statut: 'en_attente' } }
-                }),
-                Commande.aggregate([
-                    { $match: { 'parBoutique.boutique': boutiqueId, createdAt: { $gte: debutJour } } },
-                    { $unwind: '$parBoutique' },
-                    { $match: { 'parBoutique.boutique': boutiqueId, 'parBoutique.statut': { $nin: ['annulee', 'rupture'] } } },
-                    { $group: { _id: null, count: { $sum: 1 }, montant: { $sum: '$parBoutique.sousTotal' } } }
-                ]),
-                Commande.aggregate([
-                    { $match: { 'parBoutique.boutique': boutiqueId, createdAt: { $gte: debutMois } } },
-                    { $unwind: '$parBoutique' },
-                    { $match: { 'parBoutique.boutique': boutiqueId, 'parBoutique.statut': { $nin: ['annulee', 'rupture'] } } },
-                    { $group: { _id: null, montant: { $sum: '$parBoutique.sousTotal' } } }
-                ])
-            ]);
+        // CA du jour
+        const now = new Date();
+        const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-            commandesEnAttente = enAttenteCount;
-            commandesJour = statsJour[0]?.count || 0;
-            caJour = statsJour[0]?.montant || 0;
-            caMois = statsMois[0]?.montant || 0;
-        } catch (err) {
-            console.log('Stats commandes non disponibles:', err.message);
-        }
+        const caJourResult = await Commande.aggregate([
+            {
+                $match: {
+                    'parBoutique.boutique': boutiqueId,
+                    createdAt: { $gte: debutJour }
+                }
+            },
+            { $unwind: '$parBoutique' },
+            { $match: { 'parBoutique.boutique': boutiqueId } },
+            {
+                $group: {
+                    _id: null,
+                    ca: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ne: ['$parBoutique.statut', 'annulee'] },
+                                        { $ne: ['$parBoutique.statut', 'rupture'] }
+                                    ]
+                                },
+                                '$parBoutique.total',
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
 
         res.status(200).json({
             success: true,
@@ -363,10 +430,8 @@ const getResume = async (req, res) => {
                 actifs: actifs,
                 alertes: stockFaible + enRupture,
                 promos: enPromo,
-                commandesEnAttente,
-                commandesJour,
-                caJour,
-                caMois
+                commandesEnAttente: commandesEnAttente,
+                caJour: caJourResult[0]?.ca || 0
             }
         });
 
@@ -381,39 +446,38 @@ const getResume = async (req, res) => {
 };
 
 /**
- * @desc    Dernieres commandes
+ * @desc    Recuperer les dernieres commandes
  * @route   GET /api/boutique/dashboard/dernieres-commandes
  * @access  Private (BOUTIQUE)
  */
 const getDernieresCommandes = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
-        const { limit = 5 } = req.query;
+        const { limit = 10 } = req.query;
+        const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10));
 
         const commandes = await Commande.find({
             'parBoutique.boutique': boutiqueId
         })
+            .select('numero statut total createdAt parBoutique client')
+            .populate('client', 'nom prenom email')
             .sort({ createdAt: -1 })
-            .limit(parseInt(limit))
-            .populate('client', 'nom prenom')
-            .lean();
+            .limit(limitNum);
 
-        const commandesFormatees = commandes.map(cmd => {
-            const sousCommande = cmd.parBoutique.find(
+        // Formatter pour cette boutique
+        const commandesFormatted = commandes.map(c => {
+            const sousCommande = c.parBoutique.find(
                 sc => sc.boutique.toString() === boutiqueId.toString()
             );
 
             return {
-                _id: cmd._id,
-                numero: cmd.numero,
-                client: {
-                    nom: cmd.client?.nom,
-                    prenom: cmd.client?.prenom
-                },
-                statut: sousCommande?.statut || cmd.statut,
-                sousTotal: sousCommande?.sousTotal || 0,
-                itemsCount: sousCommande?.items.reduce((sum, i) => sum + i.quantite, 0) || 0,
-                createdAt: cmd.createdAt
+                _id: c._id,
+                numero: c.numero,
+                client: c.client,
+                statut: sousCommande?.statut || c.statut,
+                total: sousCommande?.total || 0,
+                itemsCount: sousCommande?.items?.length || 0,
+                createdAt: c.createdAt
             };
         });
 
@@ -421,7 +485,7 @@ const getDernieresCommandes = async (req, res) => {
             success: true,
             message: 'Dernieres commandes recuperees.',
             data: {
-                commandes: commandesFormatees
+                commandes: commandesFormatted
             }
         });
 
@@ -435,10 +499,123 @@ const getDernieresCommandes = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Donnees pour graphique des ventes
+ * @route   GET /api/boutique/dashboard/graphique-ventes
+ * @access  Private (BOUTIQUE)
+ */
+const getGraphiqueVentes = async (req, res) => {
+    try {
+        const boutiqueId = req.user._id;
+        const { periode = '7jours' } = req.query;
+
+        // Determiner la plage de dates
+        const now = new Date();
+        let dateDebut;
+        let groupBy;
+
+        switch (periode) {
+            case '30jours':
+                dateDebut = new Date(now);
+                dateDebut.setDate(dateDebut.getDate() - 30);
+                groupBy = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+                break;
+            case '12mois':
+                dateDebut = new Date(now);
+                dateDebut.setMonth(dateDebut.getMonth() - 12);
+                groupBy = { $dateToString: { format: '%Y-%m', date: '$createdAt' } };
+                break;
+            case '7jours':
+            default:
+                dateDebut = new Date(now);
+                dateDebut.setDate(dateDebut.getDate() - 7);
+                groupBy = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+                break;
+        }
+
+        // Ventes par periode
+        const ventesParPeriode = await Commande.aggregate([
+            {
+                $match: {
+                    'parBoutique.boutique': boutiqueId,
+                    createdAt: { $gte: dateDebut }
+                }
+            },
+            { $unwind: '$parBoutique' },
+            { $match: { 'parBoutique.boutique': boutiqueId } },
+            {
+                $group: {
+                    _id: groupBy,
+                    commandes: { $sum: 1 },
+                    ca: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ne: ['$parBoutique.statut', 'annulee'] },
+                                        { $ne: ['$parBoutique.statut', 'rupture'] }
+                                    ]
+                                },
+                                '$parBoutique.total',
+                                0
+                            ]
+                        }
+                    },
+                    livrees: { $sum: { $cond: [{ $eq: ['$parBoutique.statut', 'livree'] }, 1, 0] } },
+                    annulees: { $sum: { $cond: [{ $eq: ['$parBoutique.statut', 'annulee'] }, 1, 0] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // Top produits vendus
+        const topProduits = await Commande.aggregate([
+            {
+                $match: {
+                    'parBoutique.boutique': boutiqueId,
+                    'parBoutique.statut': { $nin: ['annulee', 'rupture'] }
+                }
+            },
+            { $unwind: '$parBoutique' },
+            { $match: { 'parBoutique.boutique': boutiqueId } },
+            { $unwind: '$parBoutique.items' },
+            {
+                $group: {
+                    _id: '$parBoutique.items.produit',
+                    nom: { $first: '$parBoutique.items.nom' },
+                    quantiteVendue: { $sum: '$parBoutique.items.quantite' },
+                    caGenere: { $sum: '$parBoutique.items.sousTotal' }
+                }
+            },
+            { $sort: { quantiteVendue: -1 } },
+            { $limit: 10 }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            message: 'Donnees graphique recuperees.',
+            data: {
+                periode,
+                ventesParPeriode,
+                topProduits
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur getGraphiqueVentes:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
 module.exports = {
     getStats,
     getAlertesStock,
     getProduitsParCategorie,
     getResume,
-    getDernieresCommandes
+    getDernieresCommandes,
+    getGraphiqueVentes
 };

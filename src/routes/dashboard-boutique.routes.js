@@ -11,11 +11,12 @@ const router = express.Router();
 
 // Controllers
 const {
-    getStats,
-    getAlertesStock,
-    getProduitsParCategorie,
-    getResume,
-    getDernieresCommandes
+  getStats,
+  getAlertesStock,
+  getProduitsParCategorie,
+  getResume,
+  getDernieresCommandes,
+  getGraphiqueVentes
 } = require('../controllers/dashboard-boutique.controller');
 
 // Middlewares
@@ -37,7 +38,7 @@ router.use(checkRole('BOUTIQUE'));
  * @desc    Statistiques globales de la boutique
  * @access  Private (BOUTIQUE)
  * 
- * @returns {Object} Stats produits, stock, commandes
+ * @returns {Object} Stats produits, stock, commandes, CA
  */
 router.get('/', getStats);
 
@@ -46,7 +47,7 @@ router.get('/', getStats);
  * @desc    Resume rapide pour widgets
  * @access  Private (BOUTIQUE)
  * 
- * @returns {Object} Compteurs: produits, actifs, alertes, promos, commandes
+ * @returns {Object} Compteurs: produits, actifs, alertes, promos, commandesEnAttente, caJour
  */
 router.get('/resume', getResume);
 
@@ -73,10 +74,19 @@ router.get('/produits-par-categorie', getProduitsParCategorie);
  * @desc    Dernieres commandes recues
  * @access  Private (BOUTIQUE)
  * 
- * @query {Number} [limit=5] - Nombre de commandes a retourner
- * 
+ * @query   limit - Nombre de commandes (default: 10, max: 50)
  * @returns {Object} Liste des dernieres commandes
  */
 router.get('/dernieres-commandes', getDernieresCommandes);
+
+/**
+ * @route   GET /api/boutique/dashboard/graphique-ventes
+ * @desc    Donnees pour graphique des ventes
+ * @access  Private (BOUTIQUE)
+ * 
+ * @query   periode - 7jours, 30jours, 12mois (default: 7jours)
+ * @returns {Object} ventesParPeriode, topProduits
+ */
+router.get('/graphique-ventes', getGraphiqueVentes);
 
 module.exports = router;

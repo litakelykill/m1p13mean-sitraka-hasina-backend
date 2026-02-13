@@ -4,6 +4,9 @@
  * Service centralisé pour la création et gestion des notifications
  * Utilisé par les autres controllers pour déclencher des notifications
  * 
+ * Icônes: Noms compatibles avec Lucide Icons (lucide-react, lucide-angular)
+ * https://lucide.dev/icons/
+ * 
  * @module services/notification.service
  */
 
@@ -20,7 +23,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.NOUVELLE_COMMANDE]: (data) => ({
         titre: 'Nouvelle commande reçue',
         message: `Commande #${data.numeroCommande} - ${data.totalItems} article(s) pour ${data.montant.toLocaleString()} Ar`,
-        icone: '🛒',
+        icone: 'shopping-cart',
         lien: `/boutique/commandes/${data.commandeId}`,
         priorite: 'haute'
     }),
@@ -28,7 +31,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.COMMANDE_CONFIRMEE]: (data) => ({
         titre: 'Commande confirmée',
         message: `Votre commande #${data.numeroCommande} a été confirmée par ${data.nomBoutique}`,
-        icone: '✅',
+        icone: 'check-circle',
         lien: `/client/commandes/${data.commandeId}`,
         priorite: 'normale'
     }),
@@ -36,7 +39,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.COMMANDE_EN_PREPARATION]: (data) => ({
         titre: 'Commande en préparation',
         message: `Votre commande #${data.numeroCommande} est en cours de préparation chez ${data.nomBoutique}`,
-        icone: '📦',
+        icone: 'package',
         lien: `/client/commandes/${data.commandeId}`,
         priorite: 'normale'
     }),
@@ -44,7 +47,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.COMMANDE_EXPEDIEE]: (data) => ({
         titre: 'Commande expédiée',
         message: `Votre commande #${data.numeroCommande} a été expédiée par ${data.nomBoutique}`,
-        icone: '🚚',
+        icone: 'truck',
         lien: `/client/commandes/${data.commandeId}`,
         priorite: 'haute'
     }),
@@ -52,7 +55,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.COMMANDE_LIVREE]: (data) => ({
         titre: 'Commande livrée',
         message: `Votre commande #${data.numeroCommande} a été livrée. N'oubliez pas de laisser un avis !`,
-        icone: '🎉',
+        icone: 'gift',
         lien: `/client/commandes/${data.commandeId}`,
         priorite: 'normale'
     }),
@@ -60,7 +63,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.COMMANDE_ANNULEE]: (data) => ({
         titre: 'Commande annulée',
         message: `La commande #${data.numeroCommande} a été annulée${data.raison ? ` : ${data.raison}` : ''}`,
-        icone: '❌',
+        icone: 'x-circle',
         lien: data.lien || `/client/commandes/${data.commandeId}`,
         priorite: 'haute'
     }),
@@ -71,7 +74,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.NOUVEL_AVIS]: (data) => ({
         titre: 'Nouvel avis reçu',
         message: `${data.clientNom} a laissé un avis ${data.note}★ sur votre boutique`,
-        icone: '⭐',
+        icone: 'star',
         lien: `/boutique/avis`,
         priorite: 'normale'
     }),
@@ -79,7 +82,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.REPONSE_AVIS]: (data) => ({
         titre: 'Réponse à votre avis',
         message: `${data.nomBoutique} a répondu à votre avis`,
-        icone: '💬',
+        icone: 'message-circle',
         lien: `/client/commandes/${data.commandeId}`,
         priorite: 'normale'
     }),
@@ -87,7 +90,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.AVIS_MODERE]: (data) => ({
         titre: 'Avis modéré',
         message: `Votre avis a été modéré par l'administrateur${data.raison ? ` : ${data.raison}` : ''}`,
-        icone: '🛡️',
+        icone: 'shield',
         lien: null,
         priorite: 'normale'
     }),
@@ -96,9 +99,9 @@ const TEMPLATES = {
     // BOUTIQUE
     // ==========================================
     [NOTIFICATION_TYPES.BOUTIQUE_VALIDEE]: (data) => ({
-        titre: 'Boutique validée ! 🎉',
+        titre: 'Boutique validée !',
         message: `Félicitations ! Votre boutique "${data.nomBoutique}" a été validée. Vous pouvez maintenant ajouter vos produits.`,
-        icone: '🏪',
+        icone: 'store',
         lien: '/boutique/dashboard',
         priorite: 'haute'
     }),
@@ -106,7 +109,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.BOUTIQUE_REJETEE]: (data) => ({
         titre: 'Demande de boutique refusée',
         message: `Votre demande pour "${data.nomBoutique}" a été refusée${data.raison ? ` : ${data.raison}` : ''}`,
-        icone: '😔',
+        icone: 'frown',
         lien: '/boutique/profil',
         priorite: 'haute'
     }),
@@ -114,7 +117,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.BOUTIQUE_SUSPENDUE]: (data) => ({
         titre: 'Boutique suspendue',
         message: `Votre boutique a été suspendue${data.raison ? ` : ${data.raison}` : ''}. Contactez l'administrateur.`,
-        icone: '⚠️',
+        icone: 'alert-triangle',
         lien: null,
         priorite: 'urgente'
     }),
@@ -125,7 +128,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.STOCK_BAS]: (data) => ({
         titre: 'Stock bas',
         message: `Le produit "${data.nomProduit}" n'a plus que ${data.stock} unité(s) en stock`,
-        icone: '📉',
+        icone: 'trending-down',
         lien: `/boutique/produits/${data.produitId}/edit`,
         priorite: 'haute'
     }),
@@ -133,7 +136,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.RUPTURE_STOCK]: (data) => ({
         titre: 'Rupture de stock',
         message: `Le produit "${data.nomProduit}" est en rupture de stock`,
-        icone: '🚫',
+        icone: 'alert-octagon',
         lien: `/boutique/produits/${data.produitId}/edit`,
         priorite: 'urgente'
     }),
@@ -142,9 +145,9 @@ const TEMPLATES = {
     // SYSTÈME
     // ==========================================
     [NOTIFICATION_TYPES.BIENVENUE]: (data) => ({
-        titre: 'Bienvenue ! 👋',
+        titre: 'Bienvenue !',
         message: `Bienvenue sur Centre Commercial ${data.prenom} ! Découvrez nos boutiques et produits.`,
-        icone: '🎊',
+        icone: 'smile',
         lien: '/',
         priorite: 'normale'
     }),
@@ -152,7 +155,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.PROMOTION]: (data) => ({
         titre: data.titre || 'Promotion spéciale',
         message: data.message,
-        icone: '🏷️',
+        icone: 'tag',
         lien: data.lien || '/produits',
         priorite: 'normale',
         expireLe: data.expireLe || null
@@ -161,7 +164,7 @@ const TEMPLATES = {
     [NOTIFICATION_TYPES.ANNONCE]: (data) => ({
         titre: data.titre || 'Annonce',
         message: data.message,
-        icone: '📢',
+        icone: 'megaphone',
         lien: data.lien || null,
         priorite: data.priorite || 'normale'
     })

@@ -26,6 +26,7 @@ const avisRoutes = require('./avis.routes');
 const avisBoutiqueRoutes = require('./avis-boutique.routes');
 const avisAdminRoutes = require('./avis-admin.routes');
 const notificationRoutes = require('./notification.routes');
+const searchRoutes = require('./search.routes');
 
 // ============================================
 // MONTAGE DES ROUTES
@@ -128,12 +129,19 @@ router.use('/admin/avis', avisAdminRoutes);
  */
 router.use('/notifications', notificationRoutes);
 
+/**
+ * Routes recherche avancee
+ * Prefixe : /api/search
+ * Acces : PUBLIC (historique = Private)
+ */
+router.use('/search', searchRoutes);
+
 // ============================================
 // ROUTE DE CONFIGURATION (pour frontend)
 // ============================================
 router.get('/config', (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  
+
   res.status(200).json({
     success: true,
     data: {
@@ -348,6 +356,18 @@ router.get('/', (req, res) => {
           { method: 'PUT', path: '/api/notifications/read-all', description: 'Tout marquer comme lu' },
           { method: 'DELETE', path: '/api/notifications/:id', description: 'Supprimer notification' },
           { method: 'DELETE', path: '/api/notifications/read', description: 'Supprimer les lues' }
+        ]
+      },
+      search: {
+        description: 'Recherche avancee (PUBLIC + Private pour historique)',
+        routes: [
+          { method: 'GET', path: '/api/search?q=xxx', description: 'Recherche unifiee produits/boutiques' },
+          { method: 'GET', path: '/api/search/suggestions?q=xxx', description: 'Suggestions autocomplete' },
+          { method: 'GET', path: '/api/search/trending', description: 'Recherches populaires' },
+          { method: 'GET', path: '/api/search/history', description: 'Historique utilisateur (Private)' },
+          { method: 'GET', path: '/api/search/recent', description: 'Recherches recentes (Private)' },
+          { method: 'DELETE', path: '/api/search/history', description: 'Supprimer historique (Private)' },
+          { method: 'DELETE', path: '/api/search/history/:id', description: 'Supprimer une recherche (Private)' }
         ]
       }
     },

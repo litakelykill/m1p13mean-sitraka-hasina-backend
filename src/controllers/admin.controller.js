@@ -13,6 +13,7 @@ const User = require('../models/User');
 const Produit = require('../models/Produit');
 const Commande = require('../models/Commande');
 const { deleteLocalFile } = require('../config/multer');
+const NotificationService = require('../services/notification.service');
 
 // ============================================
 // CODES D'ERREUR
@@ -563,6 +564,18 @@ const validerBoutique = async (req, res) => {
 
         await boutique.save({ validateBeforeSave: false });
 
+        // ========================================
+        // NOTIFICATION A LA BOUTIQUE
+        // ========================================
+        try {
+            await NotificationService.notifierBoutiqueValidee(
+                boutique._id,
+                boutique.boutique.nomBoutique
+            );
+        } catch (notifError) {
+            console.error('Erreur notification boutique validee:', notifError);
+        }
+
         res.status(200).json({
             success: true,
             message: 'Boutique validee avec succes.',
@@ -912,12 +925,16 @@ const getDashboardGraphiques = async (req, res) => {
                     commandes: { $sum: 1 },
                     ca: {
                         $sum: {
-                            $cond: [{
-                                $and: [
-                                    { $ne: ['$statut', 'annulee'] },
-                                    { $ne: ['$statut', 'rupture'] }
-                                ]
-                            }, '$total', 0]
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ne: ['$statut', 'annulee'] },
+                                        { $ne: ['$statut', 'rupture'] }
+                                    ]
+                                },
+                                '$total',
+                                0
+                            ]
                         }
                     },
                     livrees: { $sum: { $cond: [{ $eq: ['$statut', 'livree'] }, 1, 0] } },

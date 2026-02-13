@@ -9,6 +9,8 @@
 const Commande = require('../models/Commande');
 const { TRANSITIONS_AUTORISEES } = require('../models/Commande');
 const Produit = require('../models/Produit');
+const User = require('../models/User');
+const NotificationService = require('../services/notification.service');
 
 /**
  * @desc Codes d'erreur standardises pour les operations de commande boutique
@@ -460,6 +462,26 @@ const changerStatut = async (req, res) => {
         // Mettre a jour le statut
         commande.ajouterHistoriqueStatutBoutique(boutiqueId, statut, boutiqueId, commentaire || '');
         await commande.save();
+
+        // ========================================
+        // NOTIFICATION AU CLIENT
+        // ========================================
+        try {
+            // Recuperer le nom de la boutique
+            const boutique = await User.findById(boutiqueId).select('boutique.nomBoutique');
+            const nomBoutique = boutique?.boutique?.nomBoutique || 'La boutique';
+
+            await NotificationService.notifierStatutCommande(
+                commande.client,
+                commande,
+                statut,
+                nomBoutique,
+                commentaire
+            );
+        } catch (notifError) {
+            console.error('Erreur notification client:', notifError);
+            // Ne pas bloquer si notification echoue
+        }
 
         res.status(200).json({
             success: true,

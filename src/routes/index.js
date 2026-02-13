@@ -25,6 +25,7 @@ const commandeBoutiqueRoutes = require('./commande-boutique.routes');
 const avisRoutes = require('./avis.routes');
 const avisBoutiqueRoutes = require('./avis-boutique.routes');
 const avisAdminRoutes = require('./avis-admin.routes');
+const notificationRoutes = require('./notification.routes');
 
 // ============================================
 // MONTAGE DES ROUTES
@@ -120,12 +121,19 @@ router.use('/boutique/avis', avisBoutiqueRoutes);
  */
 router.use('/admin/avis', avisAdminRoutes);
 
+/**
+ * Routes notifications
+ * Prefixe : /api/notifications
+ * Acces : Tous les utilisateurs connectes
+ */
+router.use('/notifications', notificationRoutes);
+
 // ============================================
 // ROUTE DE CONFIGURATION (pour frontend)
 // ============================================
 router.get('/config', (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-
+  
   res.status(200).json({
     success: true,
     data: {
@@ -168,8 +176,7 @@ router.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'API Centre Commercial - Documentation',
-    version: '1.4.0',
-    totalRoutes: 93,
+    version: '1.5.0',
     endpoints: {
       auth: {
         description: 'Authentification et gestion utilisateurs',
@@ -328,6 +335,19 @@ router.get('/', (req, res) => {
         routes: [
           { method: 'GET', path: '/api/admin/avis/signales', description: 'Avis signales' },
           { method: 'PUT', path: '/api/admin/avis/:id/moderer', description: 'Moderer un avis' }
+        ]
+      },
+      notifications: {
+        description: 'Notifications utilisateur (Private)',
+        routes: [
+          { method: 'GET', path: '/api/notifications', description: 'Liste des notifications' },
+          { method: 'GET', path: '/api/notifications/count', description: 'Nombre de non lues' },
+          { method: 'GET', path: '/api/notifications/types', description: 'Types de notifications' },
+          { method: 'GET', path: '/api/notifications/:id', description: 'Detail notification' },
+          { method: 'PUT', path: '/api/notifications/:id/read', description: 'Marquer comme lue' },
+          { method: 'PUT', path: '/api/notifications/read-all', description: 'Tout marquer comme lu' },
+          { method: 'DELETE', path: '/api/notifications/:id', description: 'Supprimer notification' },
+          { method: 'DELETE', path: '/api/notifications/read', description: 'Supprimer les lues' }
         ]
       }
     },

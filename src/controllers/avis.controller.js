@@ -10,6 +10,7 @@ const Avis = require('../models/Avis');
 const User = require('../models/User');
 const Commande = require('../models/Commande');
 const mongoose = require('mongoose');
+const NotificationService = require('../services/notification.service');
 
 /**
  * Codes d'erreur pour les operations sur les avis
@@ -142,6 +143,20 @@ const donnerAvis = async (req, res) => {
 
         // Populer pour la reponse
         await avis.populate('client', 'nom prenom avatar');
+
+        // ========================================
+        // NOTIFICATION A LA BOUTIQUE
+        // ========================================
+        try {
+            const clientNom = `${req.user.prenom} ${req.user.nom}`;
+            await NotificationService.notifierNouvelAvis(
+                boutiqueId,
+                avis,
+                clientNom
+            );
+        } catch (notifError) {
+            console.error('Erreur notification nouvel avis:', notifError);
+        }
 
         res.status(201).json({
             success: true,

@@ -10,6 +10,7 @@ const Commande = require('../models/Commande');
 const Panier = require('../models/Panier');
 const Produit = require('../models/Produit');
 const User = require('../models/User');
+const NotificationService = require('../services/notification.service');
 
 /**
  * @desc Codes d'erreur standardises pour les operations de commande client
@@ -280,6 +281,23 @@ const passerCommande = async (req, res) => {
         // Vider le panier
         panier.clear();
         await panier.save();
+
+        // ========================================
+        // NOTIFICATIONS AUX BOUTIQUES
+        // ========================================
+        // Notifier chaque boutique concernee
+        for (const sousCommande of commande.parBoutique) {
+            try {
+                await NotificationService.notifierNouvelleCommande(
+                    sousCommande.boutique,
+                    commande,
+                    sousCommande
+                );
+            } catch (notifError) {
+                console.error('Erreur notification boutique:', notifError);
+                // Ne pas bloquer la commande si notification echoue
+            }
+        }
 
         // Populer pour la reponse
         await commande.populate('client', 'nom prenom email telephone');

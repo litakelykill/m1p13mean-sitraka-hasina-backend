@@ -22,6 +22,11 @@ const catalogueRoutes = require('./catalogue.routes');
 const panierRoutes = require('./panier.routes');
 const commandeClientRoutes = require('./commande-client.routes');
 const commandeBoutiqueRoutes = require('./commande-boutique.routes');
+const avisRoutes = require('./avis.routes');
+const avisBoutiqueRoutes = require('./avis-boutique.routes');
+const avisAdminRoutes = require('./avis-admin.routes');
+const notificationRoutes = require('./notification.routes');
+const searchRoutes = require('./search.routes');
 
 // ============================================
 // MONTAGE DES ROUTES
@@ -96,6 +101,41 @@ router.use('/commandes', commandeClientRoutes);
  */
 router.use('/boutique/commandes', commandeBoutiqueRoutes);
 
+/**
+ * Routes avis (CLIENT + PUBLIC)
+ * Prefixe : /api/avis
+ * Acces : PUBLIC (lecture) et CLIENT (ecriture)
+ */
+router.use('/avis', avisRoutes);
+
+/**
+ * Routes avis boutique
+ * Prefixe : /api/boutique/avis
+ * Acces : BOUTIQUE uniquement
+ */
+router.use('/boutique/avis', avisBoutiqueRoutes);
+
+/**
+ * Routes avis admin
+ * Prefixe : /api/admin/avis
+ * Acces : ADMIN uniquement
+ */
+router.use('/admin/avis', avisAdminRoutes);
+
+/**
+ * Routes notifications
+ * Prefixe : /api/notifications
+ * Acces : Tous les utilisateurs connectes
+ */
+router.use('/notifications', notificationRoutes);
+
+/**
+ * Routes recherche avancee
+ * Prefixe : /api/search
+ * Acces : PUBLIC (historique = Private)
+ */
+router.use('/search', searchRoutes);
+
 // ============================================
 // ROUTE DE CONFIGURATION (pour frontend)
 // ============================================
@@ -144,8 +184,7 @@ router.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'API Centre Commercial - Documentation',
-    version: '1.3.0',
-    totalRoutes: 81,
+    version: '1.5.0',
     endpoints: {
       auth: {
         description: 'Authentification et gestion utilisateurs',
@@ -278,6 +317,57 @@ router.get('/', (req, res) => {
           { method: 'GET', path: '/api/boutique/commandes/:id', description: 'Details commande' },
           { method: 'PUT', path: '/api/boutique/commandes/:id/statut', description: 'Changer statut' },
           { method: 'POST', path: '/api/boutique/commandes/:id/notes', description: 'Ajouter note' }
+        ]
+      },
+      avis: {
+        description: 'Avis sur les boutiques (PUBLIC + CLIENT)',
+        routes: [
+          { method: 'GET', path: '/api/avis/boutique/:boutiqueId', description: 'Liste avis boutique (PUBLIC)' },
+          { method: 'POST', path: '/api/avis', description: 'Donner un avis (CLIENT)' },
+          { method: 'GET', path: '/api/avis/mes-avis', description: 'Mes avis (CLIENT)' },
+          { method: 'PUT', path: '/api/avis/:id', description: 'Modifier mon avis (CLIENT)' },
+          { method: 'DELETE', path: '/api/avis/:id', description: 'Supprimer mon avis (CLIENT)' },
+          { method: 'POST', path: '/api/avis/:id/utile', description: 'Marquer utile (CLIENT)' }
+        ]
+      },
+      avisBoutique: {
+        description: 'Gestion des avis recus (BOUTIQUE only)',
+        routes: [
+          { method: 'GET', path: '/api/boutique/avis', description: 'Liste des avis recus' },
+          { method: 'POST', path: '/api/boutique/avis/:id/reponse', description: 'Repondre a un avis' },
+          { method: 'PUT', path: '/api/boutique/avis/:id/reponse', description: 'Modifier sa reponse' }
+        ]
+      },
+      avisAdmin: {
+        description: 'Moderation des avis (ADMIN only)',
+        routes: [
+          { method: 'GET', path: '/api/admin/avis/signales', description: 'Avis signales' },
+          { method: 'PUT', path: '/api/admin/avis/:id/moderer', description: 'Moderer un avis' }
+        ]
+      },
+      notifications: {
+        description: 'Notifications utilisateur (Private)',
+        routes: [
+          { method: 'GET', path: '/api/notifications', description: 'Liste des notifications' },
+          { method: 'GET', path: '/api/notifications/count', description: 'Nombre de non lues' },
+          { method: 'GET', path: '/api/notifications/types', description: 'Types de notifications' },
+          { method: 'GET', path: '/api/notifications/:id', description: 'Detail notification' },
+          { method: 'PUT', path: '/api/notifications/:id/read', description: 'Marquer comme lue' },
+          { method: 'PUT', path: '/api/notifications/read-all', description: 'Tout marquer comme lu' },
+          { method: 'DELETE', path: '/api/notifications/:id', description: 'Supprimer notification' },
+          { method: 'DELETE', path: '/api/notifications/read', description: 'Supprimer les lues' }
+        ]
+      },
+      search: {
+        description: 'Recherche avancee (PUBLIC + Private pour historique)',
+        routes: [
+          { method: 'GET', path: '/api/search?q=xxx', description: 'Recherche unifiee produits/boutiques' },
+          { method: 'GET', path: '/api/search/suggestions?q=xxx', description: 'Suggestions autocomplete' },
+          { method: 'GET', path: '/api/search/trending', description: 'Recherches populaires' },
+          { method: 'GET', path: '/api/search/history', description: 'Historique utilisateur (Private)' },
+          { method: 'GET', path: '/api/search/recent', description: 'Recherches recentes (Private)' },
+          { method: 'DELETE', path: '/api/search/history', description: 'Supprimer historique (Private)' },
+          { method: 'DELETE', path: '/api/search/history/:id', description: 'Supprimer une recherche (Private)' }
         ]
       }
     },

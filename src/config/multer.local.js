@@ -6,9 +6,6 @@
  * - Logos boutiques (./uploads/boutiques/logos/)
  * - Bannieres boutiques (./uploads/boutiques/bannieres/)
  * 
- * Note: Sur Vercel (serverless), le systeme de fichiers est en lecture seule.
- * Les uploads locaux ne fonctionneront pas sur Vercel.
- * 
  * @module config/multer
  */
 
@@ -29,26 +26,12 @@ const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 2 * 1024 * 1024; //
 const MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5 MB pour les bannieres
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-// Verifier si on est sur Vercel (serverless) ou AWS Lambda
-const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME;
-
-// Creer les dossiers SEULEMENT en local (pas sur Vercel/serverless)
-if (!isServerless) {
-  Object.values(UPLOAD_DIRS).forEach(dir => {
-    try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-    } catch (error) {
-      console.error(`Erreur creation dossier ${dir}:`, error.message);
-    }
-  });
-}
-
-// ============================================
-// STOCKAGE MEMOIRE (pour Vercel/Serverless)
-// ============================================
-const memoryStorage = multer.memoryStorage();
+// Creer les dossiers s'ils n'existent pas
+Object.values(UPLOAD_DIRS).forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
 // ============================================
 // STOCKAGE AVATAR
@@ -109,21 +92,20 @@ const imageFilter = (req, file, cb) => {
 };
 
 // CONFIGURATIONS MULTER
-// Utilise memoryStorage sur Vercel, diskStorage en local
 const uploadAvatar = multer({
-  storage: isServerless ? memoryStorage : avatarStorage,
+  storage: avatarStorage,
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: imageFilter
 });
 
 const uploadLogo = multer({
-  storage: isServerless ? memoryStorage : logoStorage,
+  storage: logoStorage,
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: imageFilter
 });
 
 const uploadBanniere = multer({
-  storage: isServerless ? memoryStorage : banniereStorage,
+  storage: banniereStorage,
   limits: { fileSize: MAX_BANNER_SIZE },
   fileFilter: imageFilter
 });
@@ -144,23 +126,18 @@ const produitStorage = multer.diskStorage({
 });
 
 const uploadProduit = multer({
-  storage: isServerless ? memoryStorage : produitStorage,
+  storage: produitStorage,
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: imageFilter
 });
 
 /**
  * @desc Supprime un fichier local
- * @param {string} filePath - Chemin du fichier a supprimer
- * @returns {Promise<boolean>} - Resout a true si supprime ou inexistant, rejette en cas d'erreur
+ * @param {string} filePath - Chemin du fichier à supprimer
+ * @returns {Promise<boolean>} - Résout à true si supprimé ou inexistant, rejette en cas d'erreur
  */
 const deleteLocalFile = (filePath) => {
   return new Promise((resolve, reject) => {
-    // Sur Vercel/serverless, ne pas essayer de supprimer
-    if (isServerless) {
-      return resolve(true);
-    }
-
     const fullPath = filePath.startsWith('./') ? filePath : `./${filePath}`;
 
     fs.unlink(fullPath, (err) => {
@@ -197,13 +174,6 @@ const buildFileUrl = (filename, type, req) => {
     default:
       return null;
   }
-};
-
-// ============================================
-// HELPER : Verifier si uploads sont disponibles
-// ============================================
-const isUploadAvailable = () => {
-  return !isServerless;
 };
 
 // ============================================
@@ -270,12 +240,10 @@ module.exports = {
   // Helpers
   deleteLocalFile,
   buildFileUrl,
-  isUploadAvailable,
 
   // Constants
   UPLOAD_DIRS,
   MAX_FILE_SIZE,
   MAX_BANNER_SIZE,
-  ALLOWED_TYPES,
-  isServerless
+  ALLOWED_TYPES
 };

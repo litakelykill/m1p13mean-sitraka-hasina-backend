@@ -30,10 +30,44 @@ const MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5 MB pour les bannieres
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 // Verifier si on est sur Vercel (serverless) ou AWS Lambda
-const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME;
+// Vercel definit plusieurs variables qu'on peut verifier
+const isServerless = !!(
+  process.env.VERCEL ||
+  process.env.VERCEL_ENV ||
+  process.env.VERCEL_URL ||
+  process.env.VERCEL_REGION ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT ||
+  process.env.NOW_REGION // ancienne variable Vercel
+);
 
-// Creer les dossiers SEULEMENT en local (pas sur Vercel/serverless)
-if (!isServerless) {
+// Alternative: verifier si on est en production ET pas en local
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Fonction pour verifier si on peut ecrire sur le systeme de fichiers
+const canWriteToFileSystem = () => {
+  if (isServerless) return false;
+
+  try {
+    // Essayer de creer un dossier temporaire
+    const testDir = './uploads/.test';
+    if (!fs.existsSync('./uploads')) {
+      fs.mkdirSync('./uploads', { recursive: true });
+    }
+    fs.mkdirSync(testDir, { recursive: true });
+    fs.rmdirSync(testDir);
+    return true;
+  } catch (error) {
+    console.log('Systeme de fichiers en lecture seule, utilisation de memoryStorage');
+    return false;
+  }
+};
+
+// Determiner si on peut utiliser le stockage disque
+const useDiskStorage = canWriteToFileSystem();
+
+// Creer les dossiers SEULEMENT si on peut ecrire
+if (useDiskStorage) {
   Object.values(UPLOAD_DIRS).forEach(dir => {
     try {
       if (!fs.existsSync(dir)) {
@@ -109,21 +143,21 @@ const imageFilter = (req, file, cb) => {
 };
 
 // CONFIGURATIONS MULTER
-// Utilise memoryStorage sur Vercel, diskStorage en local
+// Utilise memoryStorage si on ne peut pas ecrire sur le disque
 const uploadAvatar = multer({
-  storage: isServerless ? memoryStorage : avatarStorage,
+  storage: useDiskStorage ? avatarStorage : memoryStorage,
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: imageFilter
 });
 
 const uploadLogo = multer({
-  storage: isServerless ? memoryStorage : logoStorage,
+  storage: useDiskStorage ? logoStorage : memoryStorage,
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: imageFilter
 });
 
 const uploadBanniere = multer({
-  storage: isServerless ? memoryStorage : banniereStorage,
+  storage: useDiskStorage ? banniereStorage : memoryStorage,
   limits: { fileSize: MAX_BANNER_SIZE },
   fileFilter: imageFilter
 });
@@ -144,7 +178,7 @@ const produitStorage = multer.diskStorage({
 });
 
 const uploadProduit = multer({
-  storage: isServerless ? memoryStorage : produitStorage,
+  storage: useDiskStorage ? produitStorage : memoryStorage,
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: imageFilter
 });
@@ -157,7 +191,7 @@ const uploadProduit = multer({
 const deleteLocalFile = (filePath) => {
   return new Promise((resolve, reject) => {
     // Sur Vercel/serverless, ne pas essayer de supprimer
-    if (isServerless) {
+    if (!useDiskStorage) {
       return resolve(true);
     }
 
@@ -203,61 +237,8 @@ const buildFileUrl = (filename, type, req) => {
 // HELPER : Verifier si uploads sont disponibles
 // ============================================
 const isUploadAvailable = () => {
-  return !isServerless;
+  return useDiskStorage;
 };
-
-// ============================================
-// CLOUDINARY (Commente - Pour migration future)
-// ============================================
-/*
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
-const cloudinaryAvatarStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'centre-commercial/avatars',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 300, height: 300, crop: 'fill', gravity: 'face' }],
-    public_id: (req, file) => `avatar_${req.user._id}_${Date.now()}`
-  }
-});
-
-const cloudinaryLogoStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'centre-commercial/boutiques/logos',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 400, height: 400, crop: 'fill' }],
-    public_id: (req, file) => `logo_${req.user._id}_${Date.now()}`
-  }
-});
-
-const cloudinaryBanniereStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'centre-commercial/boutiques/bannieres',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 1200, height: 400, crop: 'fill' }],
-    public_id: (req, file) => `banniere_${req.user._id}_${Date.now()}`
-  }
-});
-
-const deleteFromCloudinary = async (publicId) => {
-  try {
-    return await cloudinary.uploader.destroy(publicId);
-  } catch (error) {
-    console.error('Erreur suppression Cloudinary:', error);
-    throw error;
-  }
-};
-*/
 
 module.exports = {
   // Configurations upload
@@ -277,5 +258,6 @@ module.exports = {
   MAX_FILE_SIZE,
   MAX_BANNER_SIZE,
   ALLOWED_TYPES,
-  isServerless
+  isServerless,
+  useDiskStorage
 };

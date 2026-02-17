@@ -133,6 +133,17 @@ const boutiqueSchema = new mongoose.Schema({
     rejectedReason: {
         type: String,
         default: null
+    },
+    note: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 5
+    },
+    nombreAvis: {
+        type: Number,
+        default: 0,
+        min: 0
     }
 }, { _id: false });
 

@@ -8,6 +8,7 @@
  * - AVIS : Nouvel avis, réponse à un avis
  * - BOUTIQUE : Validation/Rejet boutique, nouveau produit
  * - STOCK : Alerte stock bas, rupture de stock
+ * - CHAT : Nouveau message
  * - SYSTEME : Notifications système, promotions
  * 
  * @module models/Notification
@@ -40,6 +41,9 @@ const NOTIFICATION_TYPES = {
     // Stock
     STOCK_BAS: 'STOCK_BAS',                           // Pour boutique
     RUPTURE_STOCK: 'RUPTURE_STOCK',                   // Pour boutique
+
+    // Chat (NOUVEAU)
+    NOUVEAU_MESSAGE: 'NOUVEAU_MESSAGE',               // Pour client et boutique
 
     // Système
     BIENVENUE: 'BIENVENUE',                           // Pour nouvel utilisateur
@@ -97,7 +101,7 @@ const notificationSchema = new mongoose.Schema({
     metadata: {
         entiteType: {
             type: String,
-            enum: ['commande', 'produit', 'avis', 'boutique', 'user', null],
+            enum: ['commande', 'produit', 'avis', 'boutique', 'user', 'conversation', null],
             default: null
         },
         entiteId: {

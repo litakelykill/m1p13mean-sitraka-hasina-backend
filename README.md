@@ -14,51 +14,95 @@ Backend Express.js pour l'application de gestion de centre commercial.
 ### Structure
 
 ```
-src/
-├── config/
-│   ├── database.js                    
-│   └── multer.js                      
+m1p13mean-sitraka-hasina-backend/
+├── server.js
+├── seed.js
+├── vercel.json
+├── package.json
 │
-├── models/
-│   ├── User.js                        
-│   ├── Categorie.js                   
-│   └── Produit.js                     
+├── scripts/
+│   ├── migrate-notes.js
+│   └── seed.js
+├── src/
+│   ├── app.js
+│   │
+│   ├── config/
+│   │   ├── database.js
+│   │   └── multer.js
+│   │
+│   ├── models/
+│   │   ├── User.js
+│   │   ├── Categorie.js
+│   │   ├── Produit.js
+│   │   ├── Panier.js
+│   │   ├── Commande.js
+│   │   ├── Avis.js
+│   │   ├── Notification.js
+│   │   ├── Conversation.js
+│   │   ├── Message.js
+│   │   └── SearchHistory.js
+│   │
+│   ├── controllers/
+│   │   ├── admin.controller.js
+│   │   ├── auth.controller.js
+│   │   ├── avis.controller.js
+│   │   ├── boutique.controller.js
+│   │   ├── catalogue.controller.js
+│   │   ├── categorie.controller.js
+│   │   ├── commande-boutique.controller.js
+│   │   ├── commande-client.controller.js
+│   │   ├── dashboard-boutique.controller.js
+│   │   ├── notification.controller.js
+│   │   ├── panier.controller.js
+│   │   ├── produit.controller.js
+│   │   ├── chat.controller.js
+│   │   └── search.controller.js
+│   │
+│   ├── middlewares/
+│   │   ├── admin.validation.js
+│   │   ├── auth.middleware.js
+│   │   ├── avis.validation.js
+│   │   ├── boutique.validation.js
+│   │   ├── categorie.validation.js
+│   │   ├── chat.validation.js
+│   │   ├── commande.validation.js
+│   │   ├── index.js
+│   │   ├── panier.validation.js
+│   │   ├── produit.validation.js
+│   │   ├── role.middleware.js
+│   │   └── validation.middleware.js
+│   │
+│   ├── routes/
+│   │   ├── admin.routes.js
+│   │   ├── auth.routes.js
+│   │   ├── avis-admin.routes.js
+│   │   ├── avis-boutique.routes.js
+│   │   ├── avis.routes.js
+│   │   ├── boutique.routes.js
+│   │   ├── catalogue.routes.js
+│   │   ├── categorie.routes.js
+│   │   ├── chat-boutique.routes.js
+│   │   ├── chat-client.routes.js
+│   │   ├── commande-boutique.routes.js
+│   │   ├── commande-client.routes.js
+│   │   ├── dashboard-boutique.routes.js
+│   │   ├── index.js
+│   │   ├── notification.routes.js
+│   │   ├── panier.routes.js
+│   │   ├── produit.routes.js
+│   │   └── search.routes.js
+│   │
+│   ├── utils/
+│   │   └── encryption.js
+│   └── services/
+│       └── notification.service.js
 │
-├── controllers/
-│   ├── auth.controller.js             
-│   ├── admin.controller.js            
-│   ├── categorie.controller.js        
-│   ├── boutique.controller.js         
-│   ├── produit.controller.js          
-│   └── dashboard-boutique.controller.js 
-│
-├── middlewares/
-│   ├── auth.middleware.js             
-│   ├── role.middleware.js             
-│   ├── validation.middleware.js       
-│   ├── admin.validation.js            
-│   ├── boutique.validation.js         
-│   ├── categorie.validation.js        
-│   └── produit.validation.js          
-│
-├── routes/
-│   ├── index.js                       
-│   ├── auth.routes.js                 
-│   ├── admin.routes.js                
-│   ├── categorie.routes.js            
-│   ├── boutique.routes.js             
-│   ├── produit.routes.js              
-│   └── dashboard-boutique.routes.js   
-│
-├── app.js                             
-└── server.js                          
-
-uploads/
-├── avatars/                           
-├── boutiques/
-│   ├── logos/                         
-│   └── bannieres/                     
-└── produits/                           
+└── uploads/ 
+    ├── avatars/                           
+    ├── boutiques/
+    │   ├── logos/                         
+    │   └── bannieres/                     
+    └── produits/                        
 ```
 
 ## Technologies
@@ -101,7 +145,12 @@ Puis éditer `.env` avec vos valeurs.
 mongod
 ```
 
-4. **Lancer le serveur**
+4. **Dépendance messages crypté**
+```bash
+npm install crypto-js
+```
+
+5. **Lancer le serveur**
 ```bash
 # Mode développement (avec nodemon)
 npm run dev

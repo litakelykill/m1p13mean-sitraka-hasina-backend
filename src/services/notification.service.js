@@ -142,6 +142,17 @@ const TEMPLATES = {
     }),
 
     // ==========================================
+    // CHAT (NOUVEAU)
+    // ==========================================
+    [NOTIFICATION_TYPES.NOUVEAU_MESSAGE]: (data) => ({
+        titre: data.titre || 'Nouveau message',
+        message: data.message || 'Vous avez reçu un nouveau message',
+        icone: 'message-square',
+        lien: data.lien || null,
+        priorite: 'normale'
+    }),
+
+    // ==========================================
     // SYSTÈME
     // ==========================================
     [NOTIFICATION_TYPES.BIENVENUE]: (data) => ({
@@ -174,6 +185,11 @@ class NotificationService {
 
     /**
      * Créer une notification à partir d'un template
+     * @param {string} type - Type de notification (NOTIFICATION_TYPES)
+     * @param {ObjectId} destinataireId - ID du destinataire
+     * @param {Object} data - Données pour le template
+     * @param {Object} options - Options supplémentaires (entiteType, entiteId, expireLe)
+     * @returns {Object|null} - Notification créée ou null en cas d'erreur
      */
     static async notify(type, destinataireId, data = {}, options = {}) {
         try {
@@ -210,7 +226,12 @@ class NotificationService {
     }
 
     /**
-     * Notifier plusieurs destinataires
+     * Notifier plusieurs destinataires avec le même message
+     * @param {string} type - Type de notification
+     * @param {Array} destinatairesIds - Liste des IDs destinataires
+     * @param {Object} data - Données pour le template
+     * @param {Object} options - Options supplémentaires
+     * @returns {Array} - Liste des notifications créées
      */
     static async notifyMultiple(type, destinatairesIds, data = {}, options = {}) {
         try {
@@ -392,6 +413,31 @@ class NotificationService {
                 nomProduit: produit.nom
             },
             { entiteType: 'produit', entiteId: produit._id }
+        );
+    }
+
+    // ==========================================
+    // RACCOURCIS POUR CHAT (NOUVEAU)
+    // ==========================================
+
+    /**
+     * Notifier un nouveau message dans une conversation
+     * @param {ObjectId} destinataireId - ID du destinataire
+     * @param {Object} conversation - Conversation concernée
+     * @param {string} messagePreview - Aperçu du message
+     * @param {string} lien - Lien vers la conversation
+     */
+    static async notifierNouveauMessage(destinataireId, conversation, messagePreview, lien) {
+        return this.notify(
+            NOTIFICATION_TYPES.NOUVEAU_MESSAGE,
+            destinataireId,
+            {
+                titre: 'Nouveau message',
+                message: messagePreview,
+                lien,
+                conversationId: conversation._id
+            },
+            { entiteType: 'conversation', entiteId: conversation._id }
         );
     }
 

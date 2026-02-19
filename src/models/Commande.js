@@ -13,16 +13,17 @@ const Schema = mongoose.Schema;
 // ============================================
 // CONSTANTES
 // ============================================
-const STATUTS = ['en_attente', 'confirmee', 'en_preparation', 'expediee', 'livree', 'annulee', 'rupture'];
+const STATUTS = ['en_attente', 'confirmee', 'en_preparation', 'expediee', 'en_livraison', 'livree', 'annulee', 'rupture'];
 const MODES_PAIEMENT = ['livraison', 'en_ligne'];
 const PAIEMENT_STATUTS = ['en_attente', 'paye', 'echoue', 'rembourse'];
 
-// Transitions autorisees
+// Transitions autorisees (BOUTIQUE peut changer ces statuts)
 const TRANSITIONS_AUTORISEES = {
     en_attente: ['confirmee', 'annulee', 'rupture'],
     confirmee: ['en_preparation', 'annulee'],
     en_preparation: ['expediee', 'annulee'],
-    expediee: ['livree'],
+    expediee: ['en_livraison', 'annulee'],
+    en_livraison: ['livree'],
     livree: [],
     annulee: [],
     rupture: []
@@ -225,6 +226,16 @@ const commandeSchema = new Schema({
         enum: PAIEMENT_STATUTS,
         default: 'en_attente'
     },
+    // Date de paiement (NOUVEAU)
+    paiementDate: {
+        type: Date,
+        default: null
+    },
+    // Date de confirmation de réception par le client (NOUVEAU)
+    receptionConfirmeeLe: {
+        type: Date,
+        default: null
+    },
     statut: {
         type: String,
         enum: STATUTS,
@@ -244,12 +255,29 @@ commandeSchema.index({ client: 1, createdAt: -1 });
 commandeSchema.index({ statut: 1 });
 commandeSchema.index({ 'parBoutique.boutique': 1, createdAt: -1 });
 commandeSchema.index({ createdAt: -1 });
+commandeSchema.index({ paiementStatut: 1 });
 
 // ============================================
 // VIRTUALS
 // ============================================
 commandeSchema.virtual('itemsCount').get(function () {
     return this.items.reduce((sum, item) => sum + item.quantite, 0);
+});
+
+/**
+ * @desc Vérifie si la commande peut être payée (toutes les sous-commandes livrées)
+ */
+commandeSchema.virtual('peutEtrePayee').get(function () {
+    if (this.paiementStatut === 'paye') return false;
+    return this.parBoutique.every(sc => sc.statut === 'livree');
+});
+
+/**
+ * @desc Vérifie si le client peut confirmer la réception
+ */
+commandeSchema.virtual('peutConfirmerReception').get(function () {
+    if (this.receptionConfirmeeLe) return false;
+    return this.parBoutique.some(sc => sc.statut === 'en_livraison' || sc.statut === 'livree');
 });
 
 // ============================================
@@ -308,7 +336,7 @@ commandeSchema.statics.findByClient = function (clientId, options = {}) {
     if (statut) filter.statut = statut;
 
     return this.find(filter)
-        .select('numero statut total items createdAt parBoutique')
+        .select('numero statut total items createdAt parBoutique paiementStatut receptionConfirmeeLe')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
@@ -331,7 +359,7 @@ commandeSchema.statics.findByBoutique = function (boutiqueId, options = {}) {
     if (statut) filter['parBoutique.statut'] = statut;
 
     return this.find(filter)
-        .select('numero statut total items createdAt parBoutique client adresseLivraison')
+        .select('numero statut total items createdAt parBoutique client adresseLivraison paiementStatut')
         .populate('client', 'nom prenom email telephone')
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -471,9 +499,29 @@ commandeSchema.methods.getSousCommandeBoutique = function (boutiqueId) {
     );
 };
 
+/**
+ * @desc Marquer le paiement comme effectué
+ * @returns {Commande} Instance de la commande mise a jour
+ */
+commandeSchema.methods.marquerCommePaye = function () {
+    this.paiementStatut = 'paye';
+    this.paiementDate = new Date();
+    return this;
+};
+
+/**
+ * @desc Confirmer la réception par le client
+ * @returns {Commande} Instance de la commande mise a jour
+ */
+commandeSchema.methods.confirmerReception = function () {
+    this.receptionConfirmeeLe = new Date();
+    return this;
+};
+
 const Commande = mongoose.model('Commande', commandeSchema);
 
 module.exports = Commande;
 module.exports.STATUTS = STATUTS;
 module.exports.TRANSITIONS_AUTORISEES = TRANSITIONS_AUTORISEES;
 module.exports.MODES_PAIEMENT = MODES_PAIEMENT;
+module.exports.PAIEMENT_STATUTS = PAIEMENT_STATUTS;

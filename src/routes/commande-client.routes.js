@@ -15,7 +15,9 @@ const {
     getMesCommandes,
     getCommande,
     getSuiviCommande,
-    annulerCommande
+    annulerCommande,
+    confirmerReception,
+    payerCommande
 } = require('../controllers/commande-client.controller');
 
 // Middlewares
@@ -78,5 +80,23 @@ router.get('/:id/suivi', validateCommandeId, getSuiviCommande);
  * @body    { raison?: String }
  */
 router.put('/:id/annuler', validateAnnulerCommande, annulerCommande);
+
+/**
+ * @route   PUT /api/commandes/:id/confirmer-reception
+ * @desc    Confirmer la reception de la commande
+ * @access  Private (CLIENT)
+ * 
+ * @note    Disponible quand la commande est en_livraison ou livree
+ */
+router.put('/:id/confirmer-reception', validateCommandeId, confirmerReception);
+
+/**
+ * @route   PUT /api/commandes/:id/payer
+ * @desc    Payer la commande (simulation)
+ * @access  Private (CLIENT)
+ * 
+ * @note    Disponible uniquement quand toutes les sous-commandes sont livrees
+ */
+router.put('/:id/payer', validateCommandeId, payerCommande);
 
 module.exports = router;

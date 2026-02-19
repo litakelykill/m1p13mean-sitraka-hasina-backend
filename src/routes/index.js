@@ -163,7 +163,7 @@ router.get('/config', (req, res) => {
     data: {
       api: {
         baseUrl: baseUrl,
-        version: '1.3.0'
+        version: '1.4.0'
       },
       uploads: {
         baseUrl: `${baseUrl}/uploads`,
@@ -188,8 +188,12 @@ router.get('/config', (req, res) => {
         produit: `${baseUrl}/uploads/placeholders/produit.png`
       },
       chat: {
-        pollingInterval: 5000, // 5 secondes
+        pollingInterval: 5000,
         maxMessageLength: 2000
+      },
+      commandes: {
+        statuts: ['en_attente', 'confirmee', 'en_preparation', 'expediee', 'en_livraison', 'livree', 'annulee', 'rupture'],
+        paiementStatuts: ['en_attente', 'paye', 'echoue', 'rembourse']
       }
     }
   });
@@ -204,7 +208,7 @@ router.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'API Centre Commercial - Documentation',
-    version: '1.6.0',
+    version: '1.7.0',
     endpoints: {
       auth: {
         description: 'Authentification et gestion utilisateurs',
@@ -325,7 +329,9 @@ router.get('/', (req, res) => {
           { method: 'GET', path: '/api/commandes', description: 'Liste commandes' },
           { method: 'GET', path: '/api/commandes/:id', description: 'Details' },
           { method: 'GET', path: '/api/commandes/:id/suivi', description: 'Suivi livraison' },
-          { method: 'PUT', path: '/api/commandes/:id/annuler', description: 'Annuler' }
+          { method: 'PUT', path: '/api/commandes/:id/annuler', description: 'Annuler' },
+          { method: 'PUT', path: '/api/commandes/:id/confirmer-reception', description: 'Confirmer reception (NOUVEAU)' },
+          { method: 'PUT', path: '/api/commandes/:id/payer', description: 'Payer commande (NOUVEAU)' }
         ]
       },
       commandesBoutique: {
@@ -335,7 +341,7 @@ router.get('/', (req, res) => {
           { method: 'GET', path: '/api/boutique/commandes/nouvelles', description: 'En attente' },
           { method: 'GET', path: '/api/boutique/commandes/stats', description: 'Statistiques' },
           { method: 'GET', path: '/api/boutique/commandes/:id', description: 'Details' },
-          { method: 'PUT', path: '/api/boutique/commandes/:id/statut', description: 'Changer statut' },
+          { method: 'PUT', path: '/api/boutique/commandes/:id/statut', description: 'Changer statut (+ en_livraison)' },
           { method: 'POST', path: '/api/boutique/commandes/:id/notes', description: 'Ajouter note' }
         ]
       },
@@ -422,6 +428,11 @@ router.get('/', (req, res) => {
       chat: {
         encryption: 'AES-256-GCM',
         pollingInterval: '5 seconds'
+      },
+      commandes: {
+        statuts: ['en_attente', 'confirmee', 'en_preparation', 'expediee', 'en_livraison', 'livree', 'annulee', 'rupture'],
+        flux: 'en_attente → confirmee → en_preparation → expediee → en_livraison → livree',
+        paiement: 'Client peut payer apres que toutes les sous-commandes soient livrees'
       }
     }
   });

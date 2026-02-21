@@ -50,6 +50,26 @@ const COMMANDE_ERRORS = {
         code: 'STOCK_INSUFFISANT',
         message: 'Stock insuffisant pour certains produits.',
         statusCode: 400
+    },
+    PAIEMENT_IMPOSSIBLE: {
+        code: 'PAIEMENT_IMPOSSIBLE',
+        message: 'Cette commande ne peut pas etre payee.',
+        statusCode: 400
+    },
+    DEJA_PAYEE: {
+        code: 'DEJA_PAYEE',
+        message: 'Cette commande a deja ete payee.',
+        statusCode: 400
+    },
+    RECEPTION_IMPOSSIBLE: {
+        code: 'RECEPTION_IMPOSSIBLE',
+        message: 'Vous ne pouvez pas encore confirmer la reception de cette commande.',
+        statusCode: 400
+    },
+    RECEPTION_DEJA_CONFIRMEE: {
+        code: 'RECEPTION_DEJA_CONFIRMEE',
+        message: 'La reception a deja ete confirmee.',
+        statusCode: 400
     }
 };
 
@@ -240,32 +260,23 @@ const passerCommande = async (req, res) => {
         // Generer numero de commande
         const numero = await Commande.genererNumero();
 
-        // Calculer totaux
-        const totaux = calculerTotaux(itemsValides);
-
         // Regrouper par boutique
         const parBoutique = regrouperParBoutique(itemsValides);
+
+        // Calculer totaux
+        const totaux = calculerTotaux(itemsValides);
 
         // Creer la commande
         const commande = await Commande.create({
             numero,
             client: clientId,
-            adresseLivraison: {
-                nom: adresseLivraison.nom,
-                prenom: adresseLivraison.prenom || '',
-                telephone: adresseLivraison.telephone || req.user.telephone || '',
-                rue: adresseLivraison.rue,
-                ville: adresseLivraison.ville,
-                codePostal: adresseLivraison.codePostal || '',
-                pays: adresseLivraison.pays || 'Madagascar',
-                instructions: adresseLivraison.instructions || ''
-            },
+            adresseLivraison,
             items: itemsValides,
             sousTotal: totaux.sousTotal,
             total: totaux.total,
             economies: totaux.economies,
             modePaiement,
-            paiementStatut: modePaiement === 'livraison' ? 'en_attente' : 'en_attente',
+            paiementStatut: 'en_attente',
             statut: 'en_attente',
             historiqueStatuts: [{
                 statut: 'en_attente',
@@ -275,18 +286,17 @@ const passerCommande = async (req, res) => {
             parBoutique
         });
 
-        // Decrementer stock
+        // Decrementer le stock
         await decrementerStock(itemsValides);
 
         // Vider le panier
-        panier.clear();
-        await panier.save();
+        await Panier.findOneAndUpdate(
+            { client: clientId },
+            { items: [], updatedAt: new Date() }
+        );
 
-        // ========================================
-        // NOTIFICATIONS AUX BOUTIQUES
-        // ========================================
-        // Notifier chaque boutique concernee
-        for (const sousCommande of commande.parBoutique) {
+        // Envoyer notifications aux boutiques
+        for (const sousCommande of parBoutique) {
             try {
                 await NotificationService.notifierNouvelleCommande(
                     sousCommande.boutique,
@@ -299,13 +309,22 @@ const passerCommande = async (req, res) => {
             }
         }
 
-        // Populer pour la reponse
-        await commande.populate('client', 'nom prenom email telephone');
-
         res.status(201).json({
             success: true,
             message: 'Commande passee avec succes.',
-            data: { commande }
+            data: {
+                commande: {
+                    _id: commande._id,
+                    numero: commande.numero,
+                    statut: commande.statut,
+                    total: commande.total,
+                    economies: commande.economies,
+                    itemsCount: commande.items.reduce((sum, item) => sum + item.quantite, 0),
+                    boutiquesCount: commande.parBoutique.length,
+                    paiementStatut: commande.paiementStatut,
+                    createdAt: commande.createdAt
+                }
+            }
         });
 
     } catch (error) {
@@ -319,7 +338,7 @@ const passerCommande = async (req, res) => {
 };
 
 /**
- * @desc    Liste des commandes du client connecte
+ * @desc    Liste des commandes du client
  * @route   GET /api/commandes
  * @access  Private (CLIENT)
  */
@@ -336,7 +355,7 @@ const getMesCommandes = async (req, res) => {
 
         const [commandes, total] = await Promise.all([
             Commande.find(filter)
-                .select('numero statut total items parBoutique createdAt')
+                .select('numero statut total items createdAt parBoutique paiementStatut receptionConfirmeeLe')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limitNum),
@@ -349,9 +368,16 @@ const getMesCommandes = async (req, res) => {
             numero: c.numero,
             statut: c.statut,
             total: c.total,
+            paiementStatut: c.paiementStatut,
+            receptionConfirmeeLe: c.receptionConfirmeeLe,
             itemsCount: c.items.reduce((sum, item) => sum + item.quantite, 0),
             boutiquesCount: c.parBoutique.length,
-            boutiques: c.parBoutique.map(b => b.nomBoutique),
+            boutiques: c.parBoutique.map(b => ({
+                nomBoutique: b.nomBoutique,
+                statut: b.statut
+            })),
+            peutConfirmerReception: !c.receptionConfirmeeLe && c.parBoutique.some(sc => sc.statut === 'en_livraison' || sc.statut === 'livree'),
+            peutPayer: c.paiementStatut !== 'paye' && c.parBoutique.every(sc => sc.statut === 'livree'),
             createdAt: c.createdAt
         }));
 
@@ -432,6 +458,12 @@ const getCommande = async (req, res) => {
         delete commandeObj.notes;
         commandeObj.parBoutique.forEach(b => delete b.notes);
 
+        // Ajouter les flags d'action
+        commandeObj.peutConfirmerReception = !commande.receptionConfirmeeLe &&
+            commande.parBoutique.some(sc => sc.statut === 'en_livraison' || sc.statut === 'livree');
+        commandeObj.peutPayer = commande.paiementStatut !== 'paye' &&
+            commande.parBoutique.every(sc => sc.statut === 'livree');
+
         res.status(200).json({
             success: true,
             message: 'Details de la commande recuperes.',
@@ -467,7 +499,7 @@ const getSuiviCommande = async (req, res) => {
         const clientId = req.user._id;
 
         const commande = await Commande.findById(req.params.id)
-            .select('numero statut historiqueStatuts parBoutique client');
+            .select('numero statut historiqueStatuts parBoutique client paiementStatut receptionConfirmeeLe');
 
         if (!commande) {
             return res.status(COMMANDE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
@@ -491,6 +523,8 @@ const getSuiviCommande = async (req, res) => {
             data: {
                 numero: commande.numero,
                 statut: commande.statut,
+                paiementStatut: commande.paiementStatut,
+                receptionConfirmeeLe: commande.receptionConfirmeeLe,
                 historiqueStatuts: commande.historiqueStatuts,
                 parBoutique: commande.parBoutique.map(b => ({
                     nomBoutique: b.nomBoutique,
@@ -603,11 +637,245 @@ const annulerCommande = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Confirmer la reception de la commande par le client
+ * @route   PUT /api/commandes/:id/confirmer-reception
+ * @access  Private (CLIENT)
+ */
+const confirmerReception = async (req, res) => {
+    try {
+        const clientId = req.user._id;
+
+        const commande = await Commande.findById(req.params.id);
+
+        if (!commande) {
+            return res.status(COMMANDE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
+                success: false,
+                message: COMMANDE_ERRORS.COMMANDE_NOT_FOUND.message,
+                error: COMMANDE_ERRORS.COMMANDE_NOT_FOUND.code
+            });
+        }
+
+        if (commande.client.toString() !== clientId.toString()) {
+            return res.status(COMMANDE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
+                success: false,
+                message: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.message,
+                error: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.code
+            });
+        }
+
+        // Verifier si deja confirmee
+        if (commande.receptionConfirmeeLe) {
+            return res.status(COMMANDE_ERRORS.RECEPTION_DEJA_CONFIRMEE.statusCode).json({
+                success: false,
+                message: COMMANDE_ERRORS.RECEPTION_DEJA_CONFIRMEE.message,
+                error: COMMANDE_ERRORS.RECEPTION_DEJA_CONFIRMEE.code
+            });
+        }
+
+        // Verifier que la commande est en livraison ou livree
+        const peutConfirmer = commande.parBoutique.some(
+            sc => sc.statut === 'en_livraison' || sc.statut === 'livree'
+        );
+
+        if (!peutConfirmer) {
+            return res.status(COMMANDE_ERRORS.RECEPTION_IMPOSSIBLE.statusCode).json({
+                success: false,
+                message: COMMANDE_ERRORS.RECEPTION_IMPOSSIBLE.message,
+                error: COMMANDE_ERRORS.RECEPTION_IMPOSSIBLE.code,
+                data: {
+                    statut: commande.statut,
+                    message: 'La commande doit etre en livraison ou livree pour confirmer la reception.'
+                }
+            });
+        }
+
+        // Confirmer la reception
+        commande.confirmerReception();
+
+        // Mettre a jour les sous-commandes en "livree" si elles sont "en_livraison"
+        for (const sousCommande of commande.parBoutique) {
+            if (sousCommande.statut === 'en_livraison') {
+                sousCommande.historiqueStatuts.push({
+                    statut: 'livree',
+                    date: new Date(),
+                    commentaire: 'Reception confirmee par le client',
+                    auteur: clientId
+                });
+                sousCommande.statut = 'livree';
+            }
+        }
+
+        // Mettre a jour le statut global
+        commande.mettreAJourStatutGlobal();
+
+        await commande.save();
+
+        // Notifier les boutiques
+        for (const sousCommande of commande.parBoutique) {
+            try {
+                const { NOTIFICATION_TYPES } = require('../models/Notification');
+                await NotificationService.notify(
+                    NOTIFICATION_TYPES.ANNONCE,
+                    sousCommande.boutique,
+                    {
+                        titre: 'Reception confirmee',
+                        message: `Le client a confirme la reception de la commande #${commande.numero}.`,
+                        lien: `/boutique/commandes/${commande._id}`
+                    },
+                    { entiteType: 'commande', entiteId: commande._id }
+                );
+            } catch (notifError) {
+                console.error('Erreur notification boutique:', notifError);
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Reception confirmee avec succes.',
+            data: {
+                numero: commande.numero,
+                statut: commande.statut,
+                receptionConfirmeeLe: commande.receptionConfirmeeLe,
+                peutPayer: commande.paiementStatut !== 'paye' &&
+                    commande.parBoutique.every(sc => sc.statut === 'livree')
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur confirmerReception:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de commande invalide.',
+                error: 'INVALID_ID'
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Payer une commande (simulation)
+ * @route   PUT /api/commandes/:id/payer
+ * @access  Private (CLIENT)
+ */
+const payerCommande = async (req, res) => {
+    try {
+        const clientId = req.user._id;
+
+        const commande = await Commande.findById(req.params.id);
+
+        if (!commande) {
+            return res.status(COMMANDE_ERRORS.COMMANDE_NOT_FOUND.statusCode).json({
+                success: false,
+                message: COMMANDE_ERRORS.COMMANDE_NOT_FOUND.message,
+                error: COMMANDE_ERRORS.COMMANDE_NOT_FOUND.code
+            });
+        }
+
+        if (commande.client.toString() !== clientId.toString()) {
+            return res.status(COMMANDE_ERRORS.COMMANDE_NOT_OWNER.statusCode).json({
+                success: false,
+                message: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.message,
+                error: COMMANDE_ERRORS.COMMANDE_NOT_OWNER.code
+            });
+        }
+
+        // Verifier si deja payee
+        if (commande.paiementStatut === 'paye') {
+            return res.status(COMMANDE_ERRORS.DEJA_PAYEE.statusCode).json({
+                success: false,
+                message: COMMANDE_ERRORS.DEJA_PAYEE.message,
+                error: COMMANDE_ERRORS.DEJA_PAYEE.code
+            });
+        }
+
+        // Verifier que toutes les sous-commandes sont livrees
+        const toutesLivrees = commande.parBoutique.every(sc => sc.statut === 'livree');
+
+        if (!toutesLivrees) {
+            return res.status(COMMANDE_ERRORS.PAIEMENT_IMPOSSIBLE.statusCode).json({
+                success: false,
+                message: COMMANDE_ERRORS.PAIEMENT_IMPOSSIBLE.message,
+                error: COMMANDE_ERRORS.PAIEMENT_IMPOSSIBLE.code,
+                data: {
+                    statut: commande.statut,
+                    boutiques: commande.parBoutique.map(b => ({
+                        nomBoutique: b.nomBoutique,
+                        statut: b.statut
+                    })),
+                    message: 'Toutes les sous-commandes doivent etre livrees avant le paiement.'
+                }
+            });
+        }
+
+        // Marquer comme paye
+        commande.marquerCommePaye();
+        await commande.save();
+
+        // Notifier les boutiques
+        for (const sousCommande of commande.parBoutique) {
+            try {
+                const { NOTIFICATION_TYPES } = require('../models/Notification');
+                await NotificationService.notify(
+                    NOTIFICATION_TYPES.ANNONCE,
+                    sousCommande.boutique,
+                    {
+                        titre: 'Paiement recu',
+                        message: `Le paiement de la commande #${commande.numero} a ete effectue (${sousCommande.total.toLocaleString()} Ar).`,
+                        lien: `/boutique/commandes/${commande._id}`
+                    },
+                    { entiteType: 'commande', entiteId: commande._id }
+                );
+            } catch (notifError) {
+                console.error('Erreur notification boutique:', notifError);
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Paiement effectue avec succes.',
+            data: {
+                numero: commande.numero,
+                total: commande.total,
+                paiementStatut: commande.paiementStatut,
+                paiementDate: commande.paiementDate
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur payerCommande:', error);
+
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'ID de commande invalide.',
+                error: 'INVALID_ID'
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
 module.exports = {
     passerCommande,
     getMesCommandes,
     getCommande,
     getSuiviCommande,
     annulerCommande,
+    confirmerReception,
+    payerCommande,
     COMMANDE_ERRORS
 };

@@ -48,6 +48,16 @@ app.get('/', (req, res) => {
     });
 });
 
+// Requete Health Check
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 // Importation et utilisation des routes définies dans ./routes/index.js
 app.use('/api', require('./routes'));
 

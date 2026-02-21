@@ -257,4 +257,38 @@ avisSchema.methods.signaler = function (raison) {
     return this;
 };
 
+// Fonction pour mettre a jour la note de la boutique
+async function updateBoutiqueNote(boutiqueId) {
+    const User = mongoose.model('User');
+
+    const result = await mongoose.model('Avis').aggregate([
+        { $match: { boutique: boutiqueId, statut: 'approuve' } },
+        {
+            $group: {
+                _id: '$boutique',
+                noteMoyenne: { $avg: '$note' },
+                totalAvis: { $sum: 1 }
+            }
+        }
+    ]);
+
+    const note = result.length > 0 ? Math.round(result[0].noteMoyenne * 10) / 10 : 0;
+    const nombreAvis = result.length > 0 ? result[0].totalAvis : 0;
+
+    await User.findByIdAndUpdate(boutiqueId, {
+        'boutique.note': note,
+        'boutique.nombreAvis': nombreAvis
+    });
+}
+
+// Apres creation ou modification d'un avis
+avisSchema.post('save', async function () {
+    await updateBoutiqueNote(this.boutique);
+});
+
+// Apres suppression d'un avis
+avisSchema.post('findOneAndDelete', async function (doc) {
+    if (doc) await updateBoutiqueNote(doc.boutique);
+});
+
 module.exports = mongoose.model('Avis', avisSchema);

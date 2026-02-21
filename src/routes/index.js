@@ -27,6 +27,8 @@ const avisBoutiqueRoutes = require('./avis-boutique.routes');
 const avisAdminRoutes = require('./avis-admin.routes');
 const notificationRoutes = require('./notification.routes');
 const searchRoutes = require('./search.routes');
+const chatClientRoutes = require('./chat-client.routes');
+const chatBoutiqueRoutes = require('./chat-boutique.routes');
 
 // ============================================
 // MONTAGE DES ROUTES
@@ -136,6 +138,20 @@ router.use('/notifications', notificationRoutes);
  */
 router.use('/search', searchRoutes);
 
+/**
+ * Routes chat client
+ * Prefixe : /api/chat
+ * Acces : CLIENT uniquement
+ */
+router.use('/chat', chatClientRoutes);
+
+/**
+ * Routes chat boutique
+ * Prefixe : /api/boutique/chat
+ * Acces : BOUTIQUE uniquement
+ */
+router.use('/boutique/chat', chatBoutiqueRoutes);
+
 // ============================================
 // ROUTE DE CONFIGURATION (pour frontend)
 // ============================================
@@ -147,7 +163,7 @@ router.get('/config', (req, res) => {
     data: {
       api: {
         baseUrl: baseUrl,
-        version: '1.2.0'
+        version: '1.4.0'
       },
       uploads: {
         baseUrl: `${baseUrl}/uploads`,
@@ -170,6 +186,14 @@ router.get('/config', (req, res) => {
         logo: `${baseUrl}/uploads/placeholders/logo.png`,
         banniere: `${baseUrl}/uploads/placeholders/banniere.png`,
         produit: `${baseUrl}/uploads/placeholders/produit.png`
+      },
+      chat: {
+        pollingInterval: 5000,
+        maxMessageLength: 2000
+      },
+      commandes: {
+        statuts: ['en_attente', 'confirmee', 'en_preparation', 'expediee', 'en_livraison', 'livree', 'annulee', 'rupture'],
+        paiementStatuts: ['en_attente', 'paye', 'echoue', 'rembourse']
       }
     }
   });
@@ -184,7 +208,7 @@ router.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'API Centre Commercial - Documentation',
-    version: '1.5.0',
+    version: '1.7.0',
     endpoints: {
       auth: {
         description: 'Authentification et gestion utilisateurs',
@@ -265,73 +289,75 @@ router.get('/', (req, res) => {
       dashboardBoutique: {
         description: 'Tableau de bord boutique (BOUTIQUE only)',
         routes: [
-          { method: 'GET', path: '/api/boutique/dashboard', description: 'Stats globales (produits, commandes, CA)' },
-          { method: 'GET', path: '/api/boutique/dashboard/resume', description: 'Resume rapide (widgets)' },
+          { method: 'GET', path: '/api/boutique/dashboard', description: 'Stats globales' },
+          { method: 'GET', path: '/api/boutique/dashboard/resume', description: 'Resume rapide' },
           { method: 'GET', path: '/api/boutique/dashboard/alertes-stock', description: 'Alertes stock' },
-          { method: 'GET', path: '/api/boutique/dashboard/produits-par-categorie', description: 'Repartition par categorie' },
+          { method: 'GET', path: '/api/boutique/dashboard/produits-par-categorie', description: 'Repartition' },
           { method: 'GET', path: '/api/boutique/dashboard/dernieres-commandes', description: 'Dernieres commandes' },
-          { method: 'GET', path: '/api/boutique/dashboard/graphique-ventes', description: 'Donnees graphique ventes' }
+          { method: 'GET', path: '/api/boutique/dashboard/graphique-ventes', description: 'Graphique ventes' }
         ]
       },
       catalogue: {
         description: 'Catalogue produits et boutiques (PUBLIC)',
         routes: [
-          { method: 'GET', path: '/api/catalogue/produits', description: 'Liste produits avec filtres' },
-          { method: 'GET', path: '/api/catalogue/produits/:id', description: 'Details produit par ID' },
-          { method: 'GET', path: '/api/catalogue/produits/slug/:slug', description: 'Details produit par slug' },
-          { method: 'GET', path: '/api/catalogue/categories', description: 'Categories produits avec comptage' },
-          { method: 'GET', path: '/api/catalogue/boutiques', description: 'Liste boutiques avec filtres' },
-          { method: 'GET', path: '/api/catalogue/boutiques/categories', description: 'Categories de boutiques' },
+          { method: 'GET', path: '/api/catalogue/produits', description: 'Liste produits' },
+          { method: 'GET', path: '/api/catalogue/produits/:id', description: 'Details par ID' },
+          { method: 'GET', path: '/api/catalogue/produits/slug/:slug', description: 'Details par slug' },
+          { method: 'GET', path: '/api/catalogue/categories', description: 'Categories' },
+          { method: 'GET', path: '/api/catalogue/boutiques', description: 'Liste boutiques' },
+          { method: 'GET', path: '/api/catalogue/boutiques/categories', description: 'Categories boutiques' },
           { method: 'GET', path: '/api/catalogue/boutiques/:id', description: 'Details boutique' },
-          { method: 'GET', path: '/api/catalogue/boutiques/:id/produits', description: 'Produits d\'une boutique' }
+          { method: 'GET', path: '/api/catalogue/boutiques/:id/produits', description: 'Produits boutique' }
         ]
       },
       panier: {
         description: 'Panier client (CLIENT only)',
         routes: [
-          { method: 'GET', path: '/api/panier', description: 'Voir le panier complet' },
-          { method: 'GET', path: '/api/panier/count', description: 'Nombre d\'articles (badge)' },
-          { method: 'GET', path: '/api/panier/verify', description: 'Verifier validite du panier' },
-          { method: 'POST', path: '/api/panier/items', description: 'Ajouter un produit' },
+          { method: 'GET', path: '/api/panier', description: 'Voir panier' },
+          { method: 'GET', path: '/api/panier/count', description: 'Nombre articles' },
+          { method: 'GET', path: '/api/panier/verify', description: 'Verifier validite' },
+          { method: 'POST', path: '/api/panier/items', description: 'Ajouter produit' },
           { method: 'PUT', path: '/api/panier/items/:produitId', description: 'Modifier quantite' },
-          { method: 'DELETE', path: '/api/panier/items/:produitId', description: 'Retirer un produit' },
-          { method: 'DELETE', path: '/api/panier', description: 'Vider le panier' }
+          { method: 'DELETE', path: '/api/panier/items/:produitId', description: 'Retirer produit' },
+          { method: 'DELETE', path: '/api/panier', description: 'Vider panier' }
         ]
       },
       commandesClient: {
         description: 'Commandes client (CLIENT only)',
         routes: [
-          { method: 'POST', path: '/api/commandes', description: 'Passer une commande' },
-          { method: 'GET', path: '/api/commandes', description: 'Liste des commandes' },
-          { method: 'GET', path: '/api/commandes/:id', description: 'Details commande' },
-          { method: 'GET', path: '/api/commandes/:id/suivi', description: 'Suivi de livraison' },
-          { method: 'PUT', path: '/api/commandes/:id/annuler', description: 'Annuler commande' }
+          { method: 'POST', path: '/api/commandes', description: 'Passer commande' },
+          { method: 'GET', path: '/api/commandes', description: 'Liste commandes' },
+          { method: 'GET', path: '/api/commandes/:id', description: 'Details' },
+          { method: 'GET', path: '/api/commandes/:id/suivi', description: 'Suivi livraison' },
+          { method: 'PUT', path: '/api/commandes/:id/annuler', description: 'Annuler' },
+          { method: 'PUT', path: '/api/commandes/:id/confirmer-reception', description: 'Confirmer reception (NOUVEAU)' },
+          { method: 'PUT', path: '/api/commandes/:id/payer', description: 'Payer commande (NOUVEAU)' }
         ]
       },
       commandesBoutique: {
         description: 'Commandes boutique (BOUTIQUE only)',
         routes: [
-          { method: 'GET', path: '/api/boutique/commandes', description: 'Liste des commandes recues' },
-          { method: 'GET', path: '/api/boutique/commandes/nouvelles', description: 'Commandes en attente' },
-          { method: 'GET', path: '/api/boutique/commandes/stats', description: 'Statistiques commandes' },
-          { method: 'GET', path: '/api/boutique/commandes/:id', description: 'Details commande' },
-          { method: 'PUT', path: '/api/boutique/commandes/:id/statut', description: 'Changer statut' },
+          { method: 'GET', path: '/api/boutique/commandes', description: 'Liste recues' },
+          { method: 'GET', path: '/api/boutique/commandes/nouvelles', description: 'En attente' },
+          { method: 'GET', path: '/api/boutique/commandes/stats', description: 'Statistiques' },
+          { method: 'GET', path: '/api/boutique/commandes/:id', description: 'Details' },
+          { method: 'PUT', path: '/api/boutique/commandes/:id/statut', description: 'Changer statut (+ en_livraison)' },
           { method: 'POST', path: '/api/boutique/commandes/:id/notes', description: 'Ajouter note' }
         ]
       },
       avis: {
-        description: 'Avis sur les boutiques (PUBLIC + CLIENT)',
+        description: 'Avis sur les boutiques',
         routes: [
-          { method: 'GET', path: '/api/avis/boutique/:boutiqueId', description: 'Liste avis boutique (PUBLIC)' },
-          { method: 'POST', path: '/api/avis', description: 'Donner un avis (CLIENT)' },
+          { method: 'GET', path: '/api/avis/boutique/:boutiqueId', description: 'Liste avis (PUBLIC)' },
+          { method: 'POST', path: '/api/avis', description: 'Donner avis (CLIENT)' },
           { method: 'GET', path: '/api/avis/mes-avis', description: 'Mes avis (CLIENT)' },
-          { method: 'PUT', path: '/api/avis/:id', description: 'Modifier mon avis (CLIENT)' },
-          { method: 'DELETE', path: '/api/avis/:id', description: 'Supprimer mon avis (CLIENT)' },
+          { method: 'PUT', path: '/api/avis/:id', description: 'Modifier (CLIENT)' },
+          { method: 'DELETE', path: '/api/avis/:id', description: 'Supprimer (CLIENT)' },
           { method: 'POST', path: '/api/avis/:id/utile', description: 'Marquer utile (CLIENT)' }
         ]
       },
       avisBoutique: {
-        description: 'Gestion des avis recus (BOUTIQUE only)',
+        description: 'Gestion avis recus (BOUTIQUE only)',
         routes: [
           { method: 'GET', path: '/api/boutique/avis', description: 'Liste des avis recus' },
           { method: 'POST', path: '/api/boutique/avis/:id/reponse', description: 'Repondre a un avis' },
@@ -339,7 +365,7 @@ router.get('/', (req, res) => {
         ]
       },
       avisAdmin: {
-        description: 'Moderation des avis (ADMIN only)',
+        description: 'Moderation avis (ADMIN only)',
         routes: [
           { method: 'GET', path: '/api/admin/avis/signales', description: 'Avis signales' },
           { method: 'PUT', path: '/api/admin/avis/:id/moderer', description: 'Moderer un avis' }
@@ -369,6 +395,26 @@ router.get('/', (req, res) => {
           { method: 'DELETE', path: '/api/search/history', description: 'Supprimer historique (Private)' },
           { method: 'DELETE', path: '/api/search/history/:id', description: 'Supprimer une recherche (Private)' }
         ]
+      },
+      chat: {
+        description: 'Chat securise client-boutique (AES-256)',
+        routes: [
+          { method: 'POST', path: '/api/chat/conversations', description: 'Demarrer conversation (CLIENT)' },
+          { method: 'GET', path: '/api/chat/conversations', description: 'Liste conversations (CLIENT)' },
+          { method: 'GET', path: '/api/chat/conversations/unread-count', description: 'Non lues (CLIENT)' },
+          { method: 'GET', path: '/api/chat/conversations/search', description: 'Rechercher (CLIENT)' },
+          { method: 'GET', path: '/api/chat/conversations/:id', description: 'Details + messages (CLIENT)' },
+          { method: 'POST', path: '/api/chat/conversations/:id/messages', description: 'Envoyer message (CLIENT)' },
+          { method: 'GET', path: '/api/chat/conversations/:id/poll', description: 'Polling (CLIENT)' },
+          { method: 'PUT', path: '/api/chat/conversations/:id/read', description: 'Marquer lu (CLIENT)' },
+          { method: 'GET', path: '/api/boutique/chat/conversations', description: 'Liste (BOUTIQUE)' },
+          { method: 'GET', path: '/api/boutique/chat/conversations/unread-count', description: 'Non lues (BOUTIQUE)' },
+          { method: 'GET', path: '/api/boutique/chat/conversations/search', description: 'Rechercher (BOUTIQUE)' },
+          { method: 'GET', path: '/api/boutique/chat/conversations/:id', description: 'Details (BOUTIQUE)' },
+          { method: 'POST', path: '/api/boutique/chat/conversations/:id/messages', description: 'Repondre (BOUTIQUE)' },
+          { method: 'GET', path: '/api/boutique/chat/conversations/:id/poll', description: 'Polling (BOUTIQUE)' },
+          { method: 'PUT', path: '/api/boutique/chat/conversations/:id/read', description: 'Marquer lu (BOUTIQUE)' }
+        ]
       }
     },
     documentation: {
@@ -378,6 +424,15 @@ router.get('/', (req, res) => {
         avatar: { endpoint: 'PUT /api/auth/avatar', maxSize: '2 MB' },
         logo: { endpoint: 'PUT /api/boutique/logo', maxSize: '2 MB' },
         banniere: { endpoint: 'PUT /api/boutique/banniere', maxSize: '5 MB' }
+      },
+      chat: {
+        encryption: 'AES-256-GCM',
+        pollingInterval: '5 seconds'
+      },
+      commandes: {
+        statuts: ['en_attente', 'confirmee', 'en_preparation', 'expediee', 'en_livraison', 'livree', 'annulee', 'rupture'],
+        flux: 'en_attente → confirmee → en_preparation → expediee → en_livraison → livree',
+        paiement: 'Client peut payer apres que toutes les sous-commandes soient livrees'
       }
     }
   });

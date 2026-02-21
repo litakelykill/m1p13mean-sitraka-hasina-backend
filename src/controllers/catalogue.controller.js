@@ -444,6 +444,12 @@ const getCategories = async (req, res) => {
  * @desc    Liste des boutiques validees avec filtres et pagination
  * @route   GET /api/catalogue/boutiques
  * @access  Public
+ * 
+ * @query   page - Numero de page (defaut: 1)
+ * @query   limit - Resultats par page (defaut: 12, max: 50)
+ * @query   categorie - Filtrer par categorie de boutique
+ * @query   search - Rechercher par nom de boutique
+ * @query   sort - Tri: nom_asc, nom_desc, recent, ancien, produits_desc, note_desc (defaut: produits_desc)
  */
 const getBoutiques = async (req, res) => {
     try {
@@ -468,9 +474,9 @@ const getBoutiques = async (req, res) => {
             filter['boutique.nomBoutique'] = { $regex: search, $options: 'i' };
         }
 
-        // Recuperer les boutiques
+        // Recuperer les boutiques avec note et nombreAvis
         const boutiques = await User.find(filter)
-            .select('boutique.nomBoutique boutique.description boutique.logo boutique.categorie boutique.slug createdAt')
+            .select('boutique.nomBoutique boutique.description boutique.logo boutique.categorie boutique.slug boutique.note boutique.nombreAvis createdAt')
             .lean();
 
         // Recuperer les IDs des boutiques
@@ -512,6 +518,8 @@ const getBoutiques = async (req, res) => {
                 logoUrl: b.boutique.logo
                     ? `${baseUrl}/uploads/boutiques/logos/${b.boutique.logo}`
                     : null,
+                note: b.boutique.note || 0,
+                nombreAvis: b.boutique.nombreAvis || 0,
                 produitsCount: stats.produitsCount,
                 produitsActifs: stats.produitsActifs,
                 produitsEnPromo: stats.produitsEnPromo,
@@ -532,6 +540,28 @@ const getBoutiques = async (req, res) => {
                 break;
             case 'ancien':
                 boutiquesFormatted.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                break;
+            case 'note_desc':
+                // Tri par note decroissante, puis par nombre d'avis decroissant
+                boutiquesFormatted.sort((a, b) => {
+                    if (b.note !== a.note) {
+                        return b.note - a.note;
+                    }
+                    return b.nombreAvis - a.nombreAvis;
+                });
+                break;
+            case 'note_asc':
+                // Tri par note croissante
+                boutiquesFormatted.sort((a, b) => {
+                    if (a.note !== b.note) {
+                        return a.note - b.note;
+                    }
+                    return a.nombreAvis - b.nombreAvis;
+                });
+                break;
+            case 'avis_desc':
+                // Tri par nombre d'avis decroissant
+                boutiquesFormatted.sort((a, b) => b.nombreAvis - a.nombreAvis);
                 break;
             case 'produits_desc':
             default:

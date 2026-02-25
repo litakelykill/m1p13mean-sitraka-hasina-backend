@@ -4,6 +4,9 @@
   "description": "Backend Express.js pour application centre commercial - Projet M1 P13",
   "main": "server.js",
   "type": "commonjs",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",

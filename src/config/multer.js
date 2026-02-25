@@ -6,12 +6,19 @@
  * - Logos boutiques (./uploads/boutiques/logos/)
  * - Bannieres boutiques (./uploads/boutiques/bannieres/)
  * 
+ * NOTE: En production (Vercel), utiliser les routes /cloud avec Cloudinary
+ * 
  * @module config/multer
  */
 
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+
+// ============================================
+// DÉTECTION ENVIRONNEMENT
+// ============================================
+const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
 
 // CONFIGURATION
 // Dossiers d'upload
@@ -26,57 +33,16 @@ const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 2 * 1024 * 1024; //
 const MAX_BANNER_SIZE = 5 * 1024 * 1024; // 5 MB pour les bannieres
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-// Creer les dossiers s'ils n'existent pas
-Object.values(UPLOAD_DIRS).forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-});
-
 // ============================================
-// STOCKAGE AVATAR
+// CRÉER LES DOSSIERS (SEULEMENT EN LOCAL)
 // ============================================
-const avatarStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, UPLOAD_DIRS.avatars);
-  },
-  filename: function (req, file, cb) {
-    const userId = req.user._id.toString();
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${userId}_${timestamp}${ext}`);
-  }
-});
-
-// ============================================
-// STOCKAGE LOGO BOUTIQUE
-// ============================================
-const logoStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, UPLOAD_DIRS.logos);
-  },
-  filename: function (req, file, cb) {
-    const odId = req.user._id.toString();
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `logo_${odId}_${timestamp}${ext}`);
-  }
-});
-
-// ============================================
-// STOCKAGE BANNIERE BOUTIQUE
-// ============================================
-const banniereStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, UPLOAD_DIRS.bannieres);
-  },
-  filename: function (req, file, cb) {
-    const odId = req.user._id.toString();
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `banniere_${odId}_${timestamp}${ext}`);
-  }
-});
+if (!isProduction) {
+  Object.values(UPLOAD_DIRS).forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+}
 
 // ============================================
 // FILTRE DES FICHIERS
@@ -91,7 +57,71 @@ const imageFilter = (req, file, cb) => {
   }
 };
 
+// ============================================
+// CONFIGURATION STOCKAGE SELON ENVIRONNEMENT
+// ============================================
+let avatarStorage, logoStorage, banniereStorage, produitStorage;
+
+if (isProduction) {
+  // PRODUCTION: Memory storage (routes locales désactivées, utiliser /cloud)
+  avatarStorage = multer.memoryStorage();
+  logoStorage = multer.memoryStorage();
+  banniereStorage = multer.memoryStorage();
+  produitStorage = multer.memoryStorage();
+} else {
+  // DÉVELOPPEMENT: Disk storage
+  avatarStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, UPLOAD_DIRS.avatars);
+    },
+    filename: function (req, file, cb) {
+      const userId = req.user._id.toString();
+      const timestamp = Date.now();
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${userId}_${timestamp}${ext}`);
+    }
+  });
+
+  logoStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, UPLOAD_DIRS.logos);
+    },
+    filename: function (req, file, cb) {
+      const odId = req.user._id.toString();
+      const timestamp = Date.now();
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `logo_${odId}_${timestamp}${ext}`);
+    }
+  });
+
+  banniereStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, UPLOAD_DIRS.bannieres);
+    },
+    filename: function (req, file, cb) {
+      const odId = req.user._id.toString();
+      const timestamp = Date.now();
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `banniere_${odId}_${timestamp}${ext}`);
+    }
+  });
+
+  produitStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      cb(null, UPLOAD_DIRS.produits);
+    },
+    filename: function (req, file, cb) {
+      const odId = req.user._id.toString();
+      const timestamp = Date.now();
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `produit_${odId}_${timestamp}${ext}`);
+    }
+  });
+}
+
+// ============================================
 // CONFIGURATIONS MULTER
+// ============================================
 const uploadAvatar = multer({
   storage: avatarStorage,
   limits: { fileSize: MAX_FILE_SIZE },
@@ -110,21 +140,6 @@ const uploadBanniere = multer({
   fileFilter: imageFilter
 });
 
-// ============================================
-// STOCKAGE PRODUITS
-// ============================================
-const produitStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, UPLOAD_DIRS.produits);
-  },
-  filename: function (req, file, cb) {
-    const odId = req.user._id.toString();
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `produit_${odId}_${timestamp}${ext}`);
-  }
-});
-
 const uploadProduit = multer({
   storage: produitStorage,
   limits: { fileSize: MAX_FILE_SIZE },
@@ -138,6 +153,11 @@ const uploadProduit = multer({
  */
 const deleteLocalFile = (filePath) => {
   return new Promise((resolve, reject) => {
+    // En production, ne pas essayer de supprimer (pas de fichiers locaux)
+    if (isProduction) {
+      return resolve(true);
+    }
+
     const fullPath = filePath.startsWith('./') ? filePath : `./${filePath}`;
 
     fs.unlink(fullPath, (err) => {
@@ -160,6 +180,11 @@ const deleteLocalFile = (filePath) => {
 const buildFileUrl = (filename, type, req) => {
   if (!filename) return null;
 
+  // Si c'est déjà une URL Cloudinary, la retourner telle quelle
+  if (filename.includes('cloudinary.com')) {
+    return filename;
+  }
+
   const baseUrl = `${req.protocol}://${req.get('host')}`;
 
   switch (type) {
@@ -175,59 +200,6 @@ const buildFileUrl = (filename, type, req) => {
       return null;
   }
 };
-
-// ============================================
-// CLOUDINARY (Commente - Pour migration future)
-// ============================================
-/*
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
-const cloudinaryAvatarStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'centre-commercial/avatars',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 300, height: 300, crop: 'fill', gravity: 'face' }],
-    public_id: (req, file) => `avatar_${req.user._id}_${Date.now()}`
-  }
-});
-
-const cloudinaryLogoStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'centre-commercial/boutiques/logos',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 400, height: 400, crop: 'fill' }],
-    public_id: (req, file) => `logo_${req.user._id}_${Date.now()}`
-  }
-});
-
-const cloudinaryBanniereStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'centre-commercial/boutiques/bannieres',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 1200, height: 400, crop: 'fill' }],
-    public_id: (req, file) => `banniere_${req.user._id}_${Date.now()}`
-  }
-});
-
-const deleteFromCloudinary = async (publicId) => {
-  try {
-    return await cloudinary.uploader.destroy(publicId);
-  } catch (error) {
-    console.error('Erreur suppression Cloudinary:', error);
-    throw error;
-  }
-};
-*/
 
 module.exports = {
   // Configurations upload
@@ -245,5 +217,8 @@ module.exports = {
   UPLOAD_DIRS,
   MAX_FILE_SIZE,
   MAX_BANNER_SIZE,
-  ALLOWED_TYPES
+  ALLOWED_TYPES,
+
+  // Flag environnement
+  isProduction
 };

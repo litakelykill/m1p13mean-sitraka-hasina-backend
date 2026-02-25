@@ -145,9 +145,11 @@ Puis éditer `.env` avec vos valeurs.
 mongod
 ```
 
-4. **Dépendance messages crypté**
+4. **Dépendance messages crypté et sdk cloudinary**
 ```bash
 npm install crypto-js
+
+npm install cloudinary multer-storage-cloudinary
 ```
 
 5. **Lancer le serveur**

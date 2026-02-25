@@ -11,10 +11,14 @@
  * - GET /api/auth/me - Profil utilisateur connecte
  * - PUT /api/auth/profile - Mise a jour profil
  * - PUT /api/auth/password - Changement mot de passe
- * - PUT /api/auth/avatar - Upload photo de profil
- * - DELETE /api/auth/avatar - Supprimer photo de profil
+ * - PUT /api/auth/avatar - Upload photo de profil (LOCAL)
+ * - DELETE /api/auth/avatar - Supprimer photo de profil (LOCAL)
  * - PUT /api/auth/boutique - Mise a jour boutique (BOUTIQUE only)
  * - POST /api/auth/logout - Deconnexion
+ * 
+ * CLOUDINARY :
+ * - PUT /api/auth/avatar/cloud - Upload photo de profil (CLOUDINARY)
+ * - DELETE /api/auth/avatar/cloud - Supprimer photo de profil (CLOUDINARY)
  * 
  * @module routes/auth.routes
  */
@@ -32,7 +36,10 @@ const {
     uploadAvatar,
     deleteAvatar,
     logout,
-    updateBoutique
+    updateBoutique,
+    // CLOUDINARY
+    uploadAvatarCloudinary,
+    deleteAvatarCloudinary
 } = require('../controllers/auth.controller');
 
 // Middlewares
@@ -46,8 +53,13 @@ const {
     validateUpdateBoutique
 } = require('../middlewares/validation.middleware');
 
-// Multer pour upload fichiers
+// Multer pour upload fichiers (LOCAL)
 const { upload } = require('../config/multer');
+
+// ============================================
+// CLOUDINARY - Multer config
+// ============================================
+const { uploadAvatar: multerAvatarCloudinary } = require('../config/multer-cloudinary');
 
 // ============================================
 // ROUTES PUBLIQUES
@@ -94,7 +106,7 @@ router.put('/password', auth, validateChangePassword, changePassword);
 
 /**
  * @route   PUT /api/auth/avatar
- * @desc    Upload ou remplacer la photo de profil
+ * @desc    Upload ou remplacer la photo de profil (LOCAL)
  * @access  Private (tous les roles)
  * 
  * @header  Authorization: Bearer <token>
@@ -108,10 +120,39 @@ router.put('/avatar', auth, upload.single('avatar'), uploadAvatar);
 
 /**
  * @route   DELETE /api/auth/avatar
- * @desc    Supprimer la photo de profil
+ * @desc    Supprimer la photo de profil (LOCAL)
  * @access  Private (tous les roles)
  */
 router.delete('/avatar', auth, deleteAvatar);
+
+// ============================================
+// CLOUDINARY - ROUTES AVATAR
+// ============================================
+
+/**
+ * @route   PUT /api/auth/avatar/cloud
+ * @desc    Upload ou remplacer la photo de profil (CLOUDINARY)
+ * @access  Private (tous les roles)
+ * 
+ * @header  Authorization: Bearer <token>
+ * @header  Content-Type: multipart/form-data
+ * 
+ * @body    FormData avec champ "avatar" (fichier image)
+ *          Types acceptes : jpeg, jpg, png, webp
+ *          Taille max : 2 MB
+ */
+router.put('/avatar/cloud', auth, multerAvatarCloudinary.single('avatar'), uploadAvatarCloudinary);
+
+/**
+ * @route   DELETE /api/auth/avatar/cloud
+ * @desc    Supprimer la photo de profil (CLOUDINARY)
+ * @access  Private (tous les roles)
+ */
+router.delete('/avatar/cloud', auth, deleteAvatarCloudinary);
+
+// ============================================
+// ROUTES BOUTIQUE
+// ============================================
 
 /**
  * @route   PUT /api/auth/boutique

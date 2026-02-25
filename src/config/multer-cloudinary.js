@@ -194,9 +194,6 @@ const buildCloudinaryUrl = (publicId, options = {}) => {
     return cloudinary.url(publicId, { ...defaultOptions, ...options });
 };
 
-// ============================================
-// EXPORTS
-// ============================================
 module.exports = {
     // Instance Cloudinary (pour usage direct si necessaire)
     cloudinary,

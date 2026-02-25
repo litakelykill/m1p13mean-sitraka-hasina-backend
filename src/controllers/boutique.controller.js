@@ -8,11 +8,19 @@
  * - Gerer les horaires
  * - Gerer les reseaux sociaux
  * 
+ * CLOUDINARY : uploadLogoCloudinary, deleteLogoCloudinary,
+ *              uploadBanniereCloudinary, deleteBanniereCloudinary
+ * 
  * @module controllers/boutique.controller
  */
 
 const User = require('../models/User');
 const { deleteLocalFile, UPLOAD_DIRS } = require('../config/multer');
+
+// ============================================
+// CLOUDINARY IMPORTS
+// ============================================
+const { deleteFromCloudinary, extractPublicId } = require('../config/multer-cloudinary');
 
 // CODES D'ERREUR
 const BOUTIQUE_ERRORS = {
@@ -126,7 +134,7 @@ const getStatutValidation = async (req, res) => {
 };
 
 /**
- * @desc    Modifier les informations de la boutique (nom, description, categorie)
+ * @desc    Modifier les informations de la boutique
  * @route   PUT /api/boutique/informations
  * @access  Private (BOUTIQUE)
  */
@@ -187,7 +195,7 @@ const updateInformations = async (req, res) => {
 };
 
 /**
- * @desc    Modifier les informations de contact (email, telephone, siteWeb)
+ * @desc    Modifier les informations de contact
  * @route   PUT /api/boutique/contact
  * @access  Private (BOUTIQUE)
  */
@@ -251,17 +259,12 @@ const updateHoraires = async (req, res) => {
     try {
         if (!checkIsBoutique(req.user, res)) return;
 
-        const { horaires, horairesTexte } = req.body;
+        const { horairesTexte, horaires } = req.body;
 
         const updateData = {};
 
-        if (horaires !== undefined) {
-            updateData['boutique.horaires'] = horaires;
-        }
-
-        if (horairesTexte !== undefined) {
-            updateData['boutique.horairesTexte'] = horairesTexte;
-        }
+        if (horairesTexte !== undefined) updateData['boutique.horairesTexte'] = horairesTexte;
+        if (horaires !== undefined) updateData['boutique.horaires'] = horaires;
 
         if (Object.keys(updateData).length === 0) {
             return res.status(BOUTIQUE_ERRORS.NO_UPDATE_DATA.statusCode).json({
@@ -314,26 +317,9 @@ const updateReseauxSociaux = async (req, res) => {
             });
         }
 
-        const updateData = {};
-        const allowedNetworks = ['facebook', 'instagram', 'twitter', 'linkedin', 'tiktok', 'youtube'];
-
-        allowedNetworks.forEach(network => {
-            if (reseauxSociaux[network] !== undefined) {
-                updateData[`boutique.reseauxSociaux.${network}`] = reseauxSociaux[network];
-            }
-        });
-
-        if (Object.keys(updateData).length === 0) {
-            return res.status(BOUTIQUE_ERRORS.NO_UPDATE_DATA.statusCode).json({
-                success: false,
-                message: BOUTIQUE_ERRORS.NO_UPDATE_DATA.message,
-                error: BOUTIQUE_ERRORS.NO_UPDATE_DATA.code
-            });
-        }
-
         const user = await User.findByIdAndUpdate(
             req.user._id,
-            { $set: updateData },
+            { $set: { 'boutique.reseauxSociaux': reseauxSociaux } },
             { new: true, runValidators: true }
         );
 
@@ -356,7 +342,7 @@ const updateReseauxSociaux = async (req, res) => {
 };
 
 /**
- * @desc    Upload ou remplacer le logo de la boutique
+ * @desc    Upload ou remplacer le logo (LOCAL)
  * @route   PUT /api/boutique/logo
  * @access  Private (BOUTIQUE)
  */
@@ -383,7 +369,6 @@ const uploadLogo = async (req, res) => {
             }
         }
 
-        // Mettre a jour le logo
         user.boutique.logo = req.file.filename;
         await user.save({ validateBeforeSave: false });
 
@@ -419,7 +404,7 @@ const uploadLogo = async (req, res) => {
 };
 
 /**
- * @desc    Supprimer le logo de la boutique
+ * @desc    Supprimer le logo (LOCAL)
  * @route   DELETE /api/boutique/logo
  * @access  Private (BOUTIQUE)
  */
@@ -437,14 +422,12 @@ const deleteLogo = async (req, res) => {
             });
         }
 
-        // Supprimer le fichier
         try {
             await deleteLocalFile(`${UPLOAD_DIRS.logos}/${user.boutique.logo}`);
         } catch (deleteError) {
             console.error('Erreur suppression fichier logo:', deleteError);
         }
 
-        // Mettre a jour la base
         user.boutique.logo = null;
         await user.save({ validateBeforeSave: false });
 
@@ -467,7 +450,7 @@ const deleteLogo = async (req, res) => {
 };
 
 /**
- * @desc    Upload ou remplacer la banniere de la boutique
+ * @desc    Upload ou remplacer la banniere (LOCAL)
  * @route   PUT /api/boutique/banniere
  * @access  Private (BOUTIQUE)
  */
@@ -485,7 +468,6 @@ const uploadBanniere = async (req, res) => {
 
         const user = await User.findById(req.user._id);
 
-        // Supprimer l'ancienne banniere si elle existe
         if (user.boutique && user.boutique.banniere) {
             try {
                 await deleteLocalFile(`${UPLOAD_DIRS.bannieres}/${user.boutique.banniere}`);
@@ -494,7 +476,6 @@ const uploadBanniere = async (req, res) => {
             }
         }
 
-        // Mettre a jour la banniere
         user.boutique.banniere = req.file.filename;
         await user.save({ validateBeforeSave: false });
 
@@ -530,7 +511,7 @@ const uploadBanniere = async (req, res) => {
 };
 
 /**
- * @desc    Supprimer la banniere de la boutique
+ * @desc    Supprimer la banniere (LOCAL)
  * @route   DELETE /api/boutique/banniere
  * @access  Private (BOUTIQUE)
  */
@@ -548,14 +529,12 @@ const deleteBanniere = async (req, res) => {
             });
         }
 
-        // Supprimer le fichier
         try {
             await deleteLocalFile(`${UPLOAD_DIRS.bannieres}/${user.boutique.banniere}`);
         } catch (deleteError) {
             console.error('Erreur suppression fichier banniere:', deleteError);
         }
 
-        // Mettre a jour la base
         user.boutique.banniere = null;
         await user.save({ validateBeforeSave: false });
 
@@ -577,6 +556,227 @@ const deleteBanniere = async (req, res) => {
     }
 };
 
+// ============================================
+// CLOUDINARY - LOGO FUNCTIONS
+// ============================================
+
+/**
+ * @desc    Upload ou remplacer le logo (CLOUDINARY)
+ * @route   PUT /api/boutique/logo/cloud
+ * @access  Private (BOUTIQUE)
+ */
+const uploadLogoCloudinary = async (req, res) => {
+    try {
+        if (!checkIsBoutique(req.user, res)) return;
+
+        if (!req.file) {
+            return res.status(BOUTIQUE_ERRORS.NO_FILE_UPLOADED.statusCode).json({
+                success: false,
+                message: BOUTIQUE_ERRORS.NO_FILE_UPLOADED.message,
+                error: BOUTIQUE_ERRORS.NO_FILE_UPLOADED.code
+            });
+        }
+
+        const user = await User.findById(req.user._id);
+
+        // Supprimer l'ancien logo de Cloudinary s'il existe
+        if (user.boutique && user.boutique.logo && user.boutique.logo.includes('cloudinary.com')) {
+            try {
+                const publicId = extractPublicId(user.boutique.logo);
+                if (publicId) {
+                    await deleteFromCloudinary(publicId);
+                }
+            } catch (deleteError) {
+                console.error('Erreur suppression ancien logo Cloudinary:', deleteError);
+            }
+        }
+
+        // Avec multer-storage-cloudinary, l'URL est dans req.file.path
+        user.boutique.logo = req.file.path;
+        await user.save({ validateBeforeSave: false });
+
+        res.status(200).json({
+            success: true,
+            message: 'Logo mis a jour avec succes.',
+            data: {
+                logo: user.boutique.logo,
+                logoUrl: user.boutique.logo,
+                boutique: user.toSafeObjectWithUrls(req)
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur uploadLogoCloudinary:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Supprimer le logo (CLOUDINARY)
+ * @route   DELETE /api/boutique/logo/cloud
+ * @access  Private (BOUTIQUE)
+ */
+const deleteLogoCloudinary = async (req, res) => {
+    try {
+        if (!checkIsBoutique(req.user, res)) return;
+
+        const user = await User.findById(req.user._id);
+
+        if (!user.boutique || !user.boutique.logo) {
+            return res.status(BOUTIQUE_ERRORS.NO_LOGO.statusCode).json({
+                success: false,
+                message: BOUTIQUE_ERRORS.NO_LOGO.message,
+                error: BOUTIQUE_ERRORS.NO_LOGO.code
+            });
+        }
+
+        // Supprimer de Cloudinary
+        if (user.boutique.logo.includes('cloudinary.com')) {
+            try {
+                const publicId = extractPublicId(user.boutique.logo);
+                if (publicId) {
+                    await deleteFromCloudinary(publicId);
+                }
+            } catch (deleteError) {
+                console.error('Erreur suppression Cloudinary:', deleteError);
+            }
+        }
+
+        user.boutique.logo = null;
+        await user.save({ validateBeforeSave: false });
+
+        res.status(200).json({
+            success: true,
+            message: 'Logo supprime avec succes.',
+            data: {
+                boutique: user.toSafeObjectWithUrls(req)
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur deleteLogoCloudinary:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+// ============================================
+// CLOUDINARY - BANNIERE FUNCTIONS
+// ============================================
+
+/**
+ * @desc    Upload ou remplacer la banniere (CLOUDINARY)
+ * @route   PUT /api/boutique/banniere/cloud
+ * @access  Private (BOUTIQUE)
+ */
+const uploadBanniereCloudinary = async (req, res) => {
+    try {
+        if (!checkIsBoutique(req.user, res)) return;
+
+        if (!req.file) {
+            return res.status(BOUTIQUE_ERRORS.NO_FILE_UPLOADED.statusCode).json({
+                success: false,
+                message: BOUTIQUE_ERRORS.NO_FILE_UPLOADED.message,
+                error: BOUTIQUE_ERRORS.NO_FILE_UPLOADED.code
+            });
+        }
+
+        const user = await User.findById(req.user._id);
+
+        // Supprimer l'ancienne banniere de Cloudinary si elle existe
+        if (user.boutique && user.boutique.banniere && user.boutique.banniere.includes('cloudinary.com')) {
+            try {
+                const publicId = extractPublicId(user.boutique.banniere);
+                if (publicId) {
+                    await deleteFromCloudinary(publicId);
+                }
+            } catch (deleteError) {
+                console.error('Erreur suppression ancienne banniere Cloudinary:', deleteError);
+            }
+        }
+
+        user.boutique.banniere = req.file.path;
+        await user.save({ validateBeforeSave: false });
+
+        res.status(200).json({
+            success: true,
+            message: 'Banniere mise a jour avec succes.',
+            data: {
+                banniere: user.boutique.banniere,
+                banniereUrl: user.boutique.banniere,
+                boutique: user.toSafeObjectWithUrls(req)
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur uploadBanniereCloudinary:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Supprimer la banniere (CLOUDINARY)
+ * @route   DELETE /api/boutique/banniere/cloud
+ * @access  Private (BOUTIQUE)
+ */
+const deleteBanniereCloudinary = async (req, res) => {
+    try {
+        if (!checkIsBoutique(req.user, res)) return;
+
+        const user = await User.findById(req.user._id);
+
+        if (!user.boutique || !user.boutique.banniere) {
+            return res.status(BOUTIQUE_ERRORS.NO_BANNIERE.statusCode).json({
+                success: false,
+                message: BOUTIQUE_ERRORS.NO_BANNIERE.message,
+                error: BOUTIQUE_ERRORS.NO_BANNIERE.code
+            });
+        }
+
+        // Supprimer de Cloudinary
+        if (user.boutique.banniere.includes('cloudinary.com')) {
+            try {
+                const publicId = extractPublicId(user.boutique.banniere);
+                if (publicId) {
+                    await deleteFromCloudinary(publicId);
+                }
+            } catch (deleteError) {
+                console.error('Erreur suppression Cloudinary:', deleteError);
+            }
+        }
+
+        user.boutique.banniere = null;
+        await user.save({ validateBeforeSave: false });
+
+        res.status(200).json({
+            success: true,
+            message: 'Banniere supprimee avec succes.',
+            data: {
+                boutique: user.toSafeObjectWithUrls(req)
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur deleteBanniereCloudinary:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
 module.exports = {
     getProfilBoutique,
     getStatutValidation,
@@ -588,5 +788,10 @@ module.exports = {
     deleteLogo,
     uploadBanniere,
     deleteBanniere,
+    // CLOUDINARY
+    uploadLogoCloudinary,
+    deleteLogoCloudinary,
+    uploadBanniereCloudinary,
+    deleteBanniereCloudinary,
     BOUTIQUE_ERRORS
 };

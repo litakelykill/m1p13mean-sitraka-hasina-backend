@@ -163,15 +163,28 @@ router.get('/config', (req, res) => {
     data: {
       api: {
         baseUrl: baseUrl,
-        version: '1.4.0'
+        version: '1.8.0'
       },
       uploads: {
-        baseUrl: `${baseUrl}/uploads`,
-        paths: {
-          avatar: `${baseUrl}/uploads/avatars`,
-          logo: `${baseUrl}/uploads/boutiques/logos`,
-          banniere: `${baseUrl}/uploads/boutiques/bannieres`,
-          produit: `${baseUrl}/uploads/produits`
+        // LOCAL
+        local: {
+          baseUrl: `${baseUrl}/uploads`,
+          paths: {
+            avatar: `${baseUrl}/uploads/avatars`,
+            logo: `${baseUrl}/uploads/boutiques/logos`,
+            banniere: `${baseUrl}/uploads/boutiques/bannieres`,
+            produit: `${baseUrl}/uploads/produits`
+          }
+        },
+        // CLOUDINARY
+        cloudinary: {
+          enabled: !!(process.env.CLOUDINARY_CLOUD_NAME),
+          folders: {
+            avatar: 'centre-commercial/avatars',
+            logo: 'centre-commercial/boutiques/logos',
+            banniere: 'centre-commercial/boutiques/bannieres',
+            produit: 'centre-commercial/produits'
+          }
         },
         maxSizes: {
           avatar: '2 MB',
@@ -208,7 +221,7 @@ router.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'API Centre Commercial - Documentation',
-    version: '1.7.0',
+    version: '1.8.0',
     endpoints: {
       auth: {
         description: 'Authentification et gestion utilisateurs',
@@ -218,8 +231,10 @@ router.get('/', (req, res) => {
           { method: 'GET', path: '/api/auth/me', access: 'Private' },
           { method: 'PUT', path: '/api/auth/profile', access: 'Private' },
           { method: 'PUT', path: '/api/auth/password', access: 'Private' },
-          { method: 'PUT', path: '/api/auth/avatar', access: 'Private' },
-          { method: 'DELETE', path: '/api/auth/avatar', access: 'Private' },
+          { method: 'PUT', path: '/api/auth/avatar', access: 'Private', description: 'Upload avatar (LOCAL)' },
+          { method: 'DELETE', path: '/api/auth/avatar', access: 'Private', description: 'Supprimer avatar (LOCAL)' },
+          { method: 'PUT', path: '/api/auth/avatar/cloud', access: 'Private', description: 'Upload avatar (CLOUDINARY)' },
+          { method: 'DELETE', path: '/api/auth/avatar/cloud', access: 'Private', description: 'Supprimer avatar (CLOUDINARY)' },
           { method: 'POST', path: '/api/auth/logout', access: 'Private' }
         ]
       },
@@ -262,10 +277,14 @@ router.get('/', (req, res) => {
           { method: 'PUT', path: '/api/boutique/contact', description: 'Modifier contact' },
           { method: 'PUT', path: '/api/boutique/horaires', description: 'Modifier horaires' },
           { method: 'PUT', path: '/api/boutique/reseaux-sociaux', description: 'Modifier reseaux' },
-          { method: 'PUT', path: '/api/boutique/logo', description: 'Upload logo' },
-          { method: 'DELETE', path: '/api/boutique/logo', description: 'Supprimer logo' },
-          { method: 'PUT', path: '/api/boutique/banniere', description: 'Upload banniere' },
-          { method: 'DELETE', path: '/api/boutique/banniere', description: 'Supprimer banniere' }
+          { method: 'PUT', path: '/api/boutique/logo', description: 'Upload logo (LOCAL)' },
+          { method: 'DELETE', path: '/api/boutique/logo', description: 'Supprimer logo (LOCAL)' },
+          { method: 'PUT', path: '/api/boutique/logo/cloud', description: 'Upload logo (CLOUDINARY)' },
+          { method: 'DELETE', path: '/api/boutique/logo/cloud', description: 'Supprimer logo (CLOUDINARY)' },
+          { method: 'PUT', path: '/api/boutique/banniere', description: 'Upload banniere (LOCAL)' },
+          { method: 'DELETE', path: '/api/boutique/banniere', description: 'Supprimer banniere (LOCAL)' },
+          { method: 'PUT', path: '/api/boutique/banniere/cloud', description: 'Upload banniere (CLOUDINARY)' },
+          { method: 'DELETE', path: '/api/boutique/banniere/cloud', description: 'Supprimer banniere (CLOUDINARY)' }
         ]
       },
       produits: {
@@ -280,10 +299,14 @@ router.get('/', (req, res) => {
           { method: 'PUT', path: '/api/boutique/produits/:id/toggle', description: 'Activer/Desactiver' },
           { method: 'PUT', path: '/api/boutique/produits/:id/stock', description: 'Modifier stock' },
           { method: 'PUT', path: '/api/boutique/produits/:id/promo', description: 'Gerer promotion' },
-          { method: 'PUT', path: '/api/boutique/produits/:id/image', description: 'Upload image principale' },
-          { method: 'DELETE', path: '/api/boutique/produits/:id/image', description: 'Supprimer image principale' },
-          { method: 'POST', path: '/api/boutique/produits/:id/images', description: 'Ajouter image galerie' },
-          { method: 'DELETE', path: '/api/boutique/produits/:id/images/:filename', description: 'Supprimer image galerie' }
+          { method: 'PUT', path: '/api/boutique/produits/:id/image', description: 'Upload image principale (LOCAL)' },
+          { method: 'DELETE', path: '/api/boutique/produits/:id/image', description: 'Supprimer image principale (LOCAL)' },
+          { method: 'PUT', path: '/api/boutique/produits/:id/image/cloud', description: 'Upload image principale (CLOUDINARY)' },
+          { method: 'DELETE', path: '/api/boutique/produits/:id/image/cloud', description: 'Supprimer image principale (CLOUDINARY)' },
+          { method: 'POST', path: '/api/boutique/produits/:id/images', description: 'Ajouter image galerie (LOCAL)' },
+          { method: 'DELETE', path: '/api/boutique/produits/:id/images/:filename', description: 'Supprimer image galerie (LOCAL)' },
+          { method: 'POST', path: '/api/boutique/produits/:id/images/cloud', description: 'Ajouter image galerie (CLOUDINARY)' },
+          { method: 'DELETE', path: '/api/boutique/produits/:id/images/cloud/:imageUrl', description: 'Supprimer image galerie (CLOUDINARY)' }
         ]
       },
       dashboardBoutique: {
@@ -330,8 +353,8 @@ router.get('/', (req, res) => {
           { method: 'GET', path: '/api/commandes/:id', description: 'Details' },
           { method: 'GET', path: '/api/commandes/:id/suivi', description: 'Suivi livraison' },
           { method: 'PUT', path: '/api/commandes/:id/annuler', description: 'Annuler' },
-          { method: 'PUT', path: '/api/commandes/:id/confirmer-reception', description: 'Confirmer reception (NOUVEAU)' },
-          { method: 'PUT', path: '/api/commandes/:id/payer', description: 'Payer commande (NOUVEAU)' }
+          { method: 'PUT', path: '/api/commandes/:id/confirmer-reception', description: 'Confirmer reception' },
+          { method: 'PUT', path: '/api/commandes/:id/payer', description: 'Payer commande' }
         ]
       },
       commandesBoutique: {
@@ -341,7 +364,7 @@ router.get('/', (req, res) => {
           { method: 'GET', path: '/api/boutique/commandes/nouvelles', description: 'En attente' },
           { method: 'GET', path: '/api/boutique/commandes/stats', description: 'Statistiques' },
           { method: 'GET', path: '/api/boutique/commandes/:id', description: 'Details' },
-          { method: 'PUT', path: '/api/boutique/commandes/:id/statut', description: 'Changer statut (+ en_livraison)' },
+          { method: 'PUT', path: '/api/boutique/commandes/:id/statut', description: 'Changer statut' },
           { method: 'POST', path: '/api/boutique/commandes/:id/notes', description: 'Ajouter note' }
         ]
       },
@@ -421,9 +444,19 @@ router.get('/', (req, res) => {
       authentication: 'Header "Authorization: Bearer <token>"',
       roles: ['ADMIN', 'BOUTIQUE', 'CLIENT'],
       uploads: {
-        avatar: { endpoint: 'PUT /api/auth/avatar', maxSize: '2 MB' },
-        logo: { endpoint: 'PUT /api/boutique/logo', maxSize: '2 MB' },
-        banniere: { endpoint: 'PUT /api/boutique/banniere', maxSize: '5 MB' }
+        local: {
+          avatar: { endpoint: 'PUT /api/auth/avatar', maxSize: '2 MB' },
+          logo: { endpoint: 'PUT /api/boutique/logo', maxSize: '2 MB' },
+          banniere: { endpoint: 'PUT /api/boutique/banniere', maxSize: '5 MB' },
+          produit: { endpoint: 'PUT /api/boutique/produits/:id/image', maxSize: '2 MB' }
+        },
+        cloudinary: {
+          avatar: { endpoint: 'PUT /api/auth/avatar/cloud', maxSize: '2 MB' },
+          logo: { endpoint: 'PUT /api/boutique/logo/cloud', maxSize: '2 MB' },
+          banniere: { endpoint: 'PUT /api/boutique/banniere/cloud', maxSize: '5 MB' },
+          produit: { endpoint: 'PUT /api/boutique/produits/:id/image/cloud', maxSize: '2 MB' },
+          note: 'Utiliser les routes /cloud pour le stockage Cloudinary (production)'
+        }
       },
       chat: {
         encryption: 'AES-256-GCM',

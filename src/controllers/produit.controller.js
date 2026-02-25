@@ -3,6 +3,9 @@
  * 
  * Controleur pour la gestion des produits (BOUTIQUE)
  * 
+ * CLOUDINARY : uploadImagePrincipaleCloudinary, deleteImagePrincipaleCloudinary,
+ *              addImageCloudinary, deleteImageCloudinary
+ * 
  * @module controllers/produit.controller
  */
 
@@ -11,13 +14,15 @@ const Categorie = require('../models/Categorie');
 const { deleteLocalFile } = require('../config/multer');
 
 // ============================================
+// CLOUDINARY IMPORTS
+// ============================================
+const { deleteFromCloudinary, extractPublicId } = require('../config/multer-cloudinary');
+
+// ============================================
 // CONSTANTES
 // ============================================
 const UPLOAD_DIR = './uploads/produits';
 
-/**
- * @desc Codes d'erreur pour les operations sur les produits
- */
 const PRODUIT_ERRORS = {
     NOT_FOUND: {
         code: 'PRODUIT_NOT_FOUND',
@@ -56,11 +61,10 @@ const PRODUIT_ERRORS = {
     }
 };
 
-/**
- * @desc Obtenir les parametres de pagination depuis la requete - HELPER Pagination
- * @param {Object} query - Objet de requete Express
- * @return {Object} Parametres de pagination { page, limit, skip }
- */
+// ============================================
+// HELPERS
+// ============================================
+
 const getPagination = (query) => {
     const page = Math.max(1, parseInt(query.page) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(query.limit) || 10));
@@ -68,48 +72,39 @@ const getPagination = (query) => {
     return { page, limit, skip };
 };
 
-/**
- * @desc Verifier si le produit appartient a l'utilisateur - HELPER Ownership
- * @param {Object} produit - Document Produit Mongoose
- * @param {String} userId - ID de l'utilisateur
- * @return {Boolean} True si proprietaire, sinon false
- */
 const checkOwnership = (produit, userId) => {
     return produit.boutique.toString() === userId.toString();
 };
 
-/**
- * @desc Formater le produit avec URLs completes pour les images - HELPER Formatage
- * @param {Object} produit - Document Produit Mongoose
- * @param {Object} req - Requete Express pour obtenir le host
- * @return {Object} Produit formate avec URLs
- */
 const formatProduitResponse = (produit, req) => {
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const produitObj = produit.toObject();
 
-    // URLs images
-    produitObj.imagePrincipaleUrl = produitObj.imagePrincipale
-        ? `${baseUrl}/uploads/produits/${produitObj.imagePrincipale}`
-        : null;
+    // URLs images (pour LOCAL)
+    if (produitObj.imagePrincipale && !produitObj.imagePrincipale.includes('cloudinary.com')) {
+        produitObj.imagePrincipaleUrl = `${baseUrl}/uploads/produits/${produitObj.imagePrincipale}`;
+    } else {
+        produitObj.imagePrincipaleUrl = produitObj.imagePrincipale || null;
+    }
 
-    produitObj.imagesUrls = (produitObj.images || []).map(
-        img => `${baseUrl}/uploads/produits/${img}`
-    );
+    produitObj.imagesUrls = (produitObj.images || []).map(img => {
+        if (img.includes('cloudinary.com')) {
+            return img;
+        }
+        return `${baseUrl}/uploads/produits/${img}`;
+    });
 
     return produitObj;
 };
 
-/**
- * @desc    Creer un nouveau produit
- * @route   POST /api/boutique/produits
- * @access  Private (BOUTIQUE)
- */
+// ============================================
+// CRUD OPERATIONS
+// ============================================
+
 const createProduit = async (req, res) => {
     try {
         const { nom, description, prix, stock, categorie, seuilAlerte } = req.body;
 
-        // Verifier la categorie si fournie
         if (categorie) {
             const cat = await Categorie.findById(categorie);
             if (!cat) {
@@ -128,7 +123,6 @@ const createProduit = async (req, res) => {
             }
         }
 
-        // Creer le produit
         const produit = await Produit.create({
             nom,
             description: description || null,
@@ -139,7 +133,6 @@ const createProduit = async (req, res) => {
             boutique: req.user._id
         });
 
-        // Populate categorie pour la reponse
         await produit.populate('categorie', 'nom slug');
 
         res.status(201).json({
@@ -169,17 +162,11 @@ const createProduit = async (req, res) => {
     }
 };
 
-/**
- * @desc    Recuperer les produits de la boutique connectee
- * @route   GET /api/boutique/produits
- * @access  Private (BOUTIQUE)
- */
 const getMesProduits = async (req, res) => {
     try {
         const { page, limit, skip } = getPagination(req.query);
         const { active, categorie, search, stockFaible, enPromo } = req.query;
 
-        // Construire le filtre
         const filter = { boutique: req.user._id };
 
         if (active !== undefined) {
@@ -205,7 +192,6 @@ const getMesProduits = async (req, res) => {
             filter.enPromo = true;
         }
 
-        // Executer les requetes
         const [produits, total] = await Promise.all([
             Produit.find(filter)
                 .populate('categorie', 'nom slug')
@@ -215,7 +201,6 @@ const getMesProduits = async (req, res) => {
             Produit.countDocuments(filter)
         ]);
 
-        // Formater avec URLs
         const produitsFormatted = produits.map(p => formatProduitResponse(p, req));
 
         res.status(200).json({
@@ -242,11 +227,6 @@ const getMesProduits = async (req, res) => {
     }
 };
 
-/**
- * @desc    Recuperer un produit par ID
- * @route   GET /api/boutique/produits/:id
- * @access  Private (BOUTIQUE)
- */
 const getProduitById = async (req, res) => {
     try {
         const produit = await Produit.findById(req.params.id)
@@ -260,7 +240,6 @@ const getProduitById = async (req, res) => {
             });
         }
 
-        // Verifier proprietaire
         if (!checkOwnership(produit, req.user._id)) {
             return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
                 success: false,
@@ -294,16 +273,10 @@ const getProduitById = async (req, res) => {
     }
 };
 
-/**
- * @desc    Modifier un produit
- * @route   PUT /api/boutique/produits/:id
- * @access  Private (BOUTIQUE)
- */
 const updateProduit = async (req, res) => {
     try {
-        const { nom, description, prix, categorie } = req.body;
+        const { nom, description, prix, categorie, isActive } = req.body;
 
-        // Verifier que le produit existe
         const produit = await Produit.findById(req.params.id);
 
         if (!produit) {
@@ -314,7 +287,6 @@ const updateProduit = async (req, res) => {
             });
         }
 
-        // Verifier proprietaire
         if (!checkOwnership(produit, req.user._id)) {
             return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
                 success: false,
@@ -323,7 +295,6 @@ const updateProduit = async (req, res) => {
             });
         }
 
-        // Verifier la categorie si fournie
         if (categorie) {
             const cat = await Categorie.findById(categorie);
             if (!cat) {
@@ -335,35 +306,23 @@ const updateProduit = async (req, res) => {
             }
         }
 
-        // Mettre a jour
-        const updateData = {};
-        if (nom !== undefined) updateData.nom = nom;
-        if (description !== undefined) updateData.description = description;
-        if (prix !== undefined) updateData.prix = prix;
-        if (categorie !== undefined) updateData.categorie = categorie || null;
+        if (nom !== undefined) produit.nom = nom;
+        if (description !== undefined) produit.description = description;
+        if (prix !== undefined) produit.prix = prix;
+        if (categorie !== undefined) produit.categorie = categorie || null;
+        if (isActive !== undefined) produit.isActive = isActive;
 
-        const updatedProduit = await Produit.findByIdAndUpdate(
-            req.params.id,
-            { $set: updateData },
-            { new: true, runValidators: true }
-        ).populate('categorie', 'nom slug');
+        await produit.save();
+        await produit.populate('categorie', 'nom slug');
 
         res.status(200).json({
             success: true,
             message: 'Produit mis a jour.',
-            data: { produit: formatProduitResponse(updatedProduit, req) }
+            data: { produit: formatProduitResponse(produit, req) }
         });
 
     } catch (error) {
         console.error('Erreur updateProduit:', error);
-
-        if (error.name === 'CastError') {
-            return res.status(400).json({
-                success: false,
-                message: 'ID invalide.',
-                error: 'INVALID_ID'
-            });
-        }
 
         if (error.name === 'ValidationError') {
             const messages = Object.values(error.errors).map(err => err.message);
@@ -383,11 +342,6 @@ const updateProduit = async (req, res) => {
     }
 };
 
-/**
- * @desc    Supprimer un produit
- * @route   DELETE /api/boutique/produits/:id
- * @access  Private (BOUTIQUE)
- */
 const deleteProduit = async (req, res) => {
     try {
         const produit = await Produit.findById(req.params.id);
@@ -400,7 +354,6 @@ const deleteProduit = async (req, res) => {
             });
         }
 
-        // Verifier proprietaire
         if (!checkOwnership(produit, req.user._id)) {
             return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
                 success: false,
@@ -409,8 +362,8 @@ const deleteProduit = async (req, res) => {
             });
         }
 
-        // Supprimer les images
-        if (produit.imagePrincipale) {
+        // Supprimer les images locales
+        if (produit.imagePrincipale && !produit.imagePrincipale.includes('cloudinary.com')) {
             try {
                 await deleteLocalFile(`${UPLOAD_DIR}/${produit.imagePrincipale}`);
             } catch (e) {
@@ -420,33 +373,26 @@ const deleteProduit = async (req, res) => {
 
         if (produit.images && produit.images.length > 0) {
             for (const img of produit.images) {
-                try {
-                    await deleteLocalFile(`${UPLOAD_DIR}/${img}`);
-                } catch (e) {
-                    console.error('Erreur suppression image:', e);
+                if (!img.includes('cloudinary.com')) {
+                    try {
+                        await deleteLocalFile(`${UPLOAD_DIR}/${img}`);
+                    } catch (e) {
+                        console.error('Erreur suppression image galerie:', e);
+                    }
                 }
             }
         }
 
-        await Produit.findByIdAndDelete(req.params.id);
+        await produit.deleteOne();
 
         res.status(200).json({
             success: true,
-            message: 'Produit supprime avec succes.',
-            data: { deletedId: req.params.id }
+            message: 'Produit supprime.',
+            data: null
         });
 
     } catch (error) {
         console.error('Erreur deleteProduit:', error);
-
-        if (error.name === 'CastError') {
-            return res.status(400).json({
-                success: false,
-                message: 'ID de produit invalide.',
-                error: 'INVALID_ID'
-            });
-        }
-
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -455,11 +401,6 @@ const deleteProduit = async (req, res) => {
     }
 };
 
-/**
- * @desc    Activer/Desactiver un produit
- * @route   PUT /api/boutique/produits/:id/toggle
- * @access  Private (BOUTIQUE)
- */
 const toggleProduit = async (req, res) => {
     try {
         const produit = await Produit.findById(req.params.id);
@@ -472,7 +413,6 @@ const toggleProduit = async (req, res) => {
             });
         }
 
-        // Verifier proprietaire
         if (!checkOwnership(produit, req.user._id)) {
             return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
                 success: false,
@@ -483,28 +423,16 @@ const toggleProduit = async (req, res) => {
 
         produit.isActive = !produit.isActive;
         await produit.save();
-
         await produit.populate('categorie', 'nom slug');
-
-        const action = produit.isActive ? 'active' : 'desactive';
 
         res.status(200).json({
             success: true,
-            message: `Produit ${action} avec succes.`,
+            message: `Produit ${produit.isActive ? 'active' : 'desactive'}.`,
             data: { produit: formatProduitResponse(produit, req) }
         });
 
     } catch (error) {
         console.error('Erreur toggleProduit:', error);
-
-        if (error.name === 'CastError') {
-            return res.status(400).json({
-                success: false,
-                message: 'ID de produit invalide.',
-                error: 'INVALID_ID'
-            });
-        }
-
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -513,11 +441,6 @@ const toggleProduit = async (req, res) => {
     }
 };
 
-/**
- * @desc    Modifier le stock d'un produit
- * @route   PUT /api/boutique/produits/:id/stock
- * @access  Private (BOUTIQUE)
- */
 const updateStock = async (req, res) => {
     try {
         const { stock, seuilAlerte } = req.body;
@@ -532,7 +455,6 @@ const updateStock = async (req, res) => {
             });
         }
 
-        // Verifier proprietaire
         if (!checkOwnership(produit, req.user._id)) {
             return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
                 success: false,
@@ -541,7 +463,6 @@ const updateStock = async (req, res) => {
             });
         }
 
-        // Mettre a jour
         if (stock !== undefined) produit.stock = stock;
         if (seuilAlerte !== undefined) produit.seuilAlerte = seuilAlerte;
 
@@ -556,17 +477,6 @@ const updateStock = async (req, res) => {
 
     } catch (error) {
         console.error('Erreur updateStock:', error);
-
-        if (error.name === 'ValidationError') {
-            const messages = Object.values(error.errors).map(err => err.message);
-            return res.status(400).json({
-                success: false,
-                message: 'Erreur de validation.',
-                error: 'VALIDATION_ERROR',
-                errors: messages
-            });
-        }
-
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -575,11 +485,6 @@ const updateStock = async (req, res) => {
     }
 };
 
-/**
- * @desc    Definir ou retirer une promotion
- * @route   PUT /api/boutique/produits/:id/promo
- * @access  Private (BOUTIQUE)
- */
 const updatePromo = async (req, res) => {
     try {
         const { prixPromo, enPromo } = req.body;
@@ -594,7 +499,6 @@ const updatePromo = async (req, res) => {
             });
         }
 
-        // Verifier proprietaire
         if (!checkOwnership(produit, req.user._id)) {
             return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
                 success: false,
@@ -603,7 +507,6 @@ const updatePromo = async (req, res) => {
             });
         }
 
-        // Cas 1: Desactiver la promo
         if (enPromo === false) {
             produit.enPromo = false;
             produit.prixPromo = null;
@@ -617,7 +520,6 @@ const updatePromo = async (req, res) => {
             });
         }
 
-        // Cas 2: Definir/modifier le prix promo
         if (prixPromo !== undefined && prixPromo !== null) {
             if (prixPromo >= produit.prix) {
                 return res.status(PRODUIT_ERRORS.INVALID_PROMO.statusCode).json({
@@ -629,7 +531,6 @@ const updatePromo = async (req, res) => {
             produit.prixPromo = prixPromo;
         }
 
-        // Cas 3: Activer la promo
         if (enPromo === true) {
             if (produit.prixPromo === null || produit.prixPromo >= produit.prix) {
                 return res.status(400).json({
@@ -660,11 +561,10 @@ const updatePromo = async (req, res) => {
     }
 };
 
-/**
- * @desc    Upload ou remplacer l'image principale
- * @route   PUT /api/boutique/produits/:id/image
- * @access  Private (BOUTIQUE)
- */
+// ============================================
+// LOCAL - IMAGE FUNCTIONS
+// ============================================
+
 const uploadImagePrincipale = async (req, res) => {
     try {
         if (!req.file) {
@@ -678,7 +578,6 @@ const uploadImagePrincipale = async (req, res) => {
         const produit = await Produit.findById(req.params.id);
 
         if (!produit) {
-            // Supprimer l'image uploadee
             await deleteLocalFile(`${UPLOAD_DIR}/${req.file.filename}`);
             return res.status(PRODUIT_ERRORS.NOT_FOUND.statusCode).json({
                 success: false,
@@ -687,7 +586,6 @@ const uploadImagePrincipale = async (req, res) => {
             });
         }
 
-        // Verifier proprietaire
         if (!checkOwnership(produit, req.user._id)) {
             await deleteLocalFile(`${UPLOAD_DIR}/${req.file.filename}`);
             return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
@@ -697,7 +595,6 @@ const uploadImagePrincipale = async (req, res) => {
             });
         }
 
-        // Supprimer l'ancienne image
         if (produit.imagePrincipale) {
             try {
                 await deleteLocalFile(`${UPLOAD_DIR}/${produit.imagePrincipale}`);
@@ -706,7 +603,6 @@ const uploadImagePrincipale = async (req, res) => {
             }
         }
 
-        // Mettre a jour
         produit.imagePrincipale = req.file.filename;
         await produit.save();
         await produit.populate('categorie', 'nom slug');
@@ -736,11 +632,6 @@ const uploadImagePrincipale = async (req, res) => {
     }
 };
 
-/**
- * @desc    Supprimer l'image principale
- * @route   DELETE /api/boutique/produits/:id/image
- * @access  Private (BOUTIQUE)
- */
 const deleteImagePrincipale = async (req, res) => {
     try {
         const produit = await Produit.findById(req.params.id);
@@ -753,7 +644,6 @@ const deleteImagePrincipale = async (req, res) => {
             });
         }
 
-        // Verifier proprietaire
         if (!checkOwnership(produit, req.user._id)) {
             return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
                 success: false,
@@ -762,7 +652,6 @@ const deleteImagePrincipale = async (req, res) => {
             });
         }
 
-        // Verifier qu'il y a une image
         if (!produit.imagePrincipale) {
             return res.status(PRODUIT_ERRORS.NO_IMAGE.statusCode).json({
                 success: false,
@@ -771,14 +660,12 @@ const deleteImagePrincipale = async (req, res) => {
             });
         }
 
-        // Supprimer le fichier
         try {
             await deleteLocalFile(`${UPLOAD_DIR}/${produit.imagePrincipale}`);
         } catch (e) {
             console.error('Erreur suppression fichier:', e);
         }
 
-        // Mettre a jour
         produit.imagePrincipale = null;
         await produit.save();
         await produit.populate('categorie', 'nom slug');
@@ -791,15 +678,6 @@ const deleteImagePrincipale = async (req, res) => {
 
     } catch (error) {
         console.error('Erreur deleteImagePrincipale:', error);
-
-        if (error.name === 'CastError') {
-            return res.status(400).json({
-                success: false,
-                message: 'ID de produit invalide.',
-                error: 'INVALID_ID'
-            });
-        }
-
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -808,11 +686,6 @@ const deleteImagePrincipale = async (req, res) => {
     }
 };
 
-/**
- * @desc    Ajouter une image a la galerie
- * @route   POST /api/boutique/produits/:id/images
- * @access  Private (BOUTIQUE)
- */
 const addImage = async (req, res) => {
     try {
         if (!req.file) {
@@ -834,7 +707,6 @@ const addImage = async (req, res) => {
             });
         }
 
-        // Verifier proprietaire
         if (!checkOwnership(produit, req.user._id)) {
             await deleteLocalFile(`${UPLOAD_DIR}/${req.file.filename}`);
             return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
@@ -844,7 +716,6 @@ const addImage = async (req, res) => {
             });
         }
 
-        // Verifier limite d'images (5 max)
         if (produit.images && produit.images.length >= 5) {
             await deleteLocalFile(`${UPLOAD_DIR}/${req.file.filename}`);
             return res.status(PRODUIT_ERRORS.MAX_IMAGES.statusCode).json({
@@ -854,7 +725,6 @@ const addImage = async (req, res) => {
             });
         }
 
-        // Ajouter l'image
         produit.images = produit.images || [];
         produit.images.push(req.file.filename);
         await produit.save();
@@ -885,11 +755,6 @@ const addImage = async (req, res) => {
     }
 };
 
-/**
- * @desc    Supprimer une image de la galerie
- * @route   DELETE /api/boutique/produits/:id/images/:filename
- * @access  Private (BOUTIQUE)
- */
 const deleteImage = async (req, res) => {
     try {
         const { filename } = req.params;
@@ -904,7 +769,6 @@ const deleteImage = async (req, res) => {
             });
         }
 
-        // Verifier proprietaire
         if (!checkOwnership(produit, req.user._id)) {
             return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
                 success: false,
@@ -913,7 +777,6 @@ const deleteImage = async (req, res) => {
             });
         }
 
-        // Verifier que l'image existe dans la galerie
         if (!produit.images || !produit.images.includes(filename)) {
             return res.status(404).json({
                 success: false,
@@ -922,14 +785,12 @@ const deleteImage = async (req, res) => {
             });
         }
 
-        // Supprimer l'image
         try {
             await deleteLocalFile(`${UPLOAD_DIR}/${filename}`);
         } catch (e) {
             console.error('Erreur suppression fichier:', e);
         }
 
-        // Retirer de la liste
         produit.images = produit.images.filter(img => img !== filename);
         await produit.save();
         await produit.populate('categorie', 'nom slug');
@@ -950,11 +811,286 @@ const deleteImage = async (req, res) => {
     }
 };
 
+// ============================================
+// CLOUDINARY - IMAGE FUNCTIONS
+// ============================================
+
 /**
- * @desc    Statistiques des produits de la boutique
- * @route   GET /api/boutique/produits/stats
+ * @desc    Upload/remplacer image principale (CLOUDINARY)
+ * @route   PUT /api/boutique/produits/:id/image/cloud
  * @access  Private (BOUTIQUE)
  */
+const uploadImagePrincipaleCloudinary = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(PRODUIT_ERRORS.NO_IMAGE.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NO_IMAGE.message,
+                error: PRODUIT_ERRORS.NO_IMAGE.code
+            });
+        }
+
+        const produit = await Produit.findById(req.params.id);
+
+        if (!produit) {
+            return res.status(PRODUIT_ERRORS.NOT_FOUND.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NOT_FOUND.message,
+                error: PRODUIT_ERRORS.NOT_FOUND.code
+            });
+        }
+
+        if (!checkOwnership(produit, req.user._id)) {
+            return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NOT_OWNER.message,
+                error: PRODUIT_ERRORS.NOT_OWNER.code
+            });
+        }
+
+        // Supprimer l'ancienne image de Cloudinary si elle existe
+        if (produit.imagePrincipale && produit.imagePrincipale.includes('cloudinary.com')) {
+            try {
+                const publicId = extractPublicId(produit.imagePrincipale);
+                if (publicId) {
+                    await deleteFromCloudinary(publicId);
+                }
+            } catch (e) {
+                console.error('Erreur suppression ancienne image Cloudinary:', e);
+            }
+        }
+
+        // Avec multer-storage-cloudinary, l'URL est dans req.file.path
+        produit.imagePrincipale = req.file.path;
+        await produit.save();
+        await produit.populate('categorie', 'nom slug');
+
+        res.status(200).json({
+            success: true,
+            message: 'Image principale mise a jour.',
+            data: { produit: formatProduitResponse(produit, req) }
+        });
+
+    } catch (error) {
+        console.error('Erreur uploadImagePrincipaleCloudinary:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Supprimer image principale (CLOUDINARY)
+ * @route   DELETE /api/boutique/produits/:id/image/cloud
+ * @access  Private (BOUTIQUE)
+ */
+const deleteImagePrincipaleCloudinary = async (req, res) => {
+    try {
+        const produit = await Produit.findById(req.params.id);
+
+        if (!produit) {
+            return res.status(PRODUIT_ERRORS.NOT_FOUND.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NOT_FOUND.message,
+                error: PRODUIT_ERRORS.NOT_FOUND.code
+            });
+        }
+
+        if (!checkOwnership(produit, req.user._id)) {
+            return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NOT_OWNER.message,
+                error: PRODUIT_ERRORS.NOT_OWNER.code
+            });
+        }
+
+        if (!produit.imagePrincipale) {
+            return res.status(PRODUIT_ERRORS.NO_IMAGE.statusCode).json({
+                success: false,
+                message: 'Aucune image principale a supprimer.',
+                error: 'NO_MAIN_IMAGE'
+            });
+        }
+
+        // Supprimer de Cloudinary
+        if (produit.imagePrincipale.includes('cloudinary.com')) {
+            try {
+                const publicId = extractPublicId(produit.imagePrincipale);
+                if (publicId) {
+                    await deleteFromCloudinary(publicId);
+                }
+            } catch (e) {
+                console.error('Erreur suppression Cloudinary:', e);
+            }
+        }
+
+        produit.imagePrincipale = null;
+        await produit.save();
+        await produit.populate('categorie', 'nom slug');
+
+        res.status(200).json({
+            success: true,
+            message: 'Image principale supprimee.',
+            data: { produit: formatProduitResponse(produit, req) }
+        });
+
+    } catch (error) {
+        console.error('Erreur deleteImagePrincipaleCloudinary:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Ajouter image galerie (CLOUDINARY)
+ * @route   POST /api/boutique/produits/:id/images/cloud
+ * @access  Private (BOUTIQUE)
+ */
+const addImageCloudinary = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(PRODUIT_ERRORS.NO_IMAGE.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NO_IMAGE.message,
+                error: PRODUIT_ERRORS.NO_IMAGE.code
+            });
+        }
+
+        const produit = await Produit.findById(req.params.id);
+
+        if (!produit) {
+            return res.status(PRODUIT_ERRORS.NOT_FOUND.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NOT_FOUND.message,
+                error: PRODUIT_ERRORS.NOT_FOUND.code
+            });
+        }
+
+        if (!checkOwnership(produit, req.user._id)) {
+            return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NOT_OWNER.message,
+                error: PRODUIT_ERRORS.NOT_OWNER.code
+            });
+        }
+
+        if (produit.images && produit.images.length >= 5) {
+            return res.status(PRODUIT_ERRORS.MAX_IMAGES.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.MAX_IMAGES.message,
+                error: PRODUIT_ERRORS.MAX_IMAGES.code
+            });
+        }
+
+        // Avec multer-storage-cloudinary, l'URL est dans req.file.path
+        produit.images = produit.images || [];
+        produit.images.push(req.file.path);
+        await produit.save();
+        await produit.populate('categorie', 'nom slug');
+
+        res.status(200).json({
+            success: true,
+            message: 'Image ajoutee a la galerie.',
+            data: { produit: formatProduitResponse(produit, req) }
+        });
+
+    } catch (error) {
+        console.error('Erreur addImageCloudinary:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Supprimer image galerie (CLOUDINARY)
+ * @route   DELETE /api/boutique/produits/:id/images/cloud/:imageUrl
+ * @access  Private (BOUTIQUE)
+ * 
+ * Note: imageUrl doit etre encode en base64 pour eviter les problemes d'URL
+ */
+const deleteImageCloudinary = async (req, res) => {
+    try {
+        // Decoder l'URL de l'image (encodee en base64)
+        let imageUrl;
+        try {
+            imageUrl = Buffer.from(req.params.imageUrl, 'base64').toString('utf-8');
+        } catch (e) {
+            imageUrl = req.params.imageUrl;
+        }
+
+        const produit = await Produit.findById(req.params.id);
+
+        if (!produit) {
+            return res.status(PRODUIT_ERRORS.NOT_FOUND.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NOT_FOUND.message,
+                error: PRODUIT_ERRORS.NOT_FOUND.code
+            });
+        }
+
+        if (!checkOwnership(produit, req.user._id)) {
+            return res.status(PRODUIT_ERRORS.NOT_OWNER.statusCode).json({
+                success: false,
+                message: PRODUIT_ERRORS.NOT_OWNER.message,
+                error: PRODUIT_ERRORS.NOT_OWNER.code
+            });
+        }
+
+        // Trouver l'image dans la galerie
+        const imageIndex = produit.images.findIndex(img => img === imageUrl);
+
+        if (imageIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                message: 'Image non trouvee dans la galerie.',
+                error: 'IMAGE_NOT_FOUND'
+            });
+        }
+
+        // Supprimer de Cloudinary
+        if (imageUrl.includes('cloudinary.com')) {
+            try {
+                const publicId = extractPublicId(imageUrl);
+                if (publicId) {
+                    await deleteFromCloudinary(publicId);
+                }
+            } catch (e) {
+                console.error('Erreur suppression Cloudinary:', e);
+            }
+        }
+
+        produit.images.splice(imageIndex, 1);
+        await produit.save();
+        await produit.populate('categorie', 'nom slug');
+
+        res.status(200).json({
+            success: true,
+            message: 'Image supprimee de la galerie.',
+            data: { produit: formatProduitResponse(produit, req) }
+        });
+
+    } catch (error) {
+        console.error('Erreur deleteImageCloudinary:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+// ============================================
+// STATS
+// ============================================
+
 const getStats = async (req, res) => {
     try {
         const boutiqueId = req.user._id;
@@ -1016,5 +1152,10 @@ module.exports = {
     addImage,
     deleteImage,
     getStats,
+    // CLOUDINARY
+    uploadImagePrincipaleCloudinary,
+    deleteImagePrincipaleCloudinary,
+    addImageCloudinary,
+    deleteImageCloudinary,
     PRODUIT_ERRORS
 };

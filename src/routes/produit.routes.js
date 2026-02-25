@@ -3,6 +3,18 @@
  * 
  * Routes pour la gestion des produits (BOUTIQUE uniquement)
  * 
+ * LOCAL :
+ * - PUT /api/boutique/produits/:id/image - Upload image principale (LOCAL)
+ * - DELETE /api/boutique/produits/:id/image - Supprimer image principale (LOCAL)
+ * - POST /api/boutique/produits/:id/images - Ajouter image galerie (LOCAL)
+ * - DELETE /api/boutique/produits/:id/images/:filename - Supprimer image galerie (LOCAL)
+ * 
+ * CLOUDINARY :
+ * - PUT /api/boutique/produits/:id/image/cloud - Upload image principale (CLOUDINARY)
+ * - DELETE /api/boutique/produits/:id/image/cloud - Supprimer image principale (CLOUDINARY)
+ * - POST /api/boutique/produits/:id/images/cloud - Ajouter image galerie (CLOUDINARY)
+ * - DELETE /api/boutique/produits/:id/images/cloud/:imageUrl - Supprimer image galerie (CLOUDINARY)
+ * 
  * @module routes/produit.routes
  */
 
@@ -23,7 +35,12 @@ const {
     deleteImagePrincipale,
     addImage,
     deleteImage,
-    getStats
+    getStats,
+    // CLOUDINARY
+    uploadImagePrincipaleCloudinary,
+    deleteImagePrincipaleCloudinary,
+    addImageCloudinary,
+    deleteImageCloudinary
 } = require('../controllers/produit.controller');
 
 // Middlewares
@@ -37,8 +54,13 @@ const {
     validateProduitId
 } = require('../middlewares/produit.validation');
 
-// Multer pour upload images
+// Multer pour upload images (LOCAL)
 const { uploadProduit } = require('../config/multer');
+
+// ============================================
+// CLOUDINARY - Multer config
+// ============================================
+const { uploadProduit: multerProduitCloudinary } = require('../config/multer-cloudinary');
 
 // ============================================
 // Appliquer auth + checkRole('BOUTIQUE') a toutes les routes
@@ -124,35 +146,76 @@ router.put('/:id/stock', validateProduitId, validateStock, updateStock);
 router.put('/:id/promo', validateProduitId, validatePromo, updatePromo);
 
 // ============================================
-// ROUTES IMAGES
+// ROUTES IMAGES - LOCAL
 // ============================================
 
 /**
  * @route   PUT /api/boutique/produits/:id/image
- * @desc    Upload/remplacer image principale
+ * @desc    Upload/remplacer image principale (LOCAL)
  * @access  Private (BOUTIQUE)
  */
 router.put('/:id/image', validateProduitId, uploadProduit.single('image'), uploadImagePrincipale);
 
 /**
  * @route   DELETE /api/boutique/produits/:id/image
- * @desc    Supprimer image principale
+ * @desc    Supprimer image principale (LOCAL)
  * @access  Private (BOUTIQUE)
  */
 router.delete('/:id/image', validateProduitId, deleteImagePrincipale);
 
 /**
  * @route   POST /api/boutique/produits/:id/images
- * @desc    Ajouter image a la galerie
+ * @desc    Ajouter image a la galerie (LOCAL)
  * @access  Private (BOUTIQUE)
  */
 router.post('/:id/images', validateProduitId, uploadProduit.single('image'), addImage);
 
 /**
  * @route   DELETE /api/boutique/produits/:id/images/:filename
- * @desc    Supprimer image de la galerie
+ * @desc    Supprimer image de la galerie (LOCAL)
  * @access  Private (BOUTIQUE)
  */
 router.delete('/:id/images/:filename', validateProduitId, deleteImage);
+
+// ============================================
+// CLOUDINARY - ROUTES IMAGES
+// ============================================
+
+/**
+ * @route   PUT /api/boutique/produits/:id/image/cloud
+ * @desc    Upload/remplacer image principale (CLOUDINARY)
+ * @access  Private (BOUTIQUE)
+ * 
+ * @header  Content-Type: multipart/form-data
+ * @body    FormData avec champ "image" (fichier image)
+ */
+router.put('/:id/image/cloud', validateProduitId, multerProduitCloudinary.single('image'), uploadImagePrincipaleCloudinary);
+
+/**
+ * @route   DELETE /api/boutique/produits/:id/image/cloud
+ * @desc    Supprimer image principale (CLOUDINARY)
+ * @access  Private (BOUTIQUE)
+ */
+router.delete('/:id/image/cloud', validateProduitId, deleteImagePrincipaleCloudinary);
+
+/**
+ * @route   POST /api/boutique/produits/:id/images/cloud
+ * @desc    Ajouter image a la galerie (CLOUDINARY)
+ * @access  Private (BOUTIQUE)
+ * 
+ * @header  Content-Type: multipart/form-data
+ * @body    FormData avec champ "image" (fichier image)
+ */
+router.post('/:id/images/cloud', validateProduitId, multerProduitCloudinary.single('image'), addImageCloudinary);
+
+/**
+ * @route   DELETE /api/boutique/produits/:id/images/cloud/:imageUrl
+ * @desc    Supprimer image de la galerie (CLOUDINARY)
+ * @access  Private (BOUTIQUE)
+ * 
+ * Note: imageUrl doit etre encode en base64 pour eviter les problemes d'URL
+ * Exemple: btoa('https://res.cloudinary.com/...')
+ */
+router.delete('/:id/images/cloud/:imageUrl', validateProduitId, deleteImageCloudinary);
 
 module.exports = router;

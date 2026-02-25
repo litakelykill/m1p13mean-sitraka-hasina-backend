@@ -4,6 +4,18 @@
  * Routes pour la gestion du profil boutique
  * Toutes les routes sont protegees par auth + checkRole('BOUTIQUE')
  * 
+ * LOCAL :
+ * - PUT /api/boutique/logo - Upload logo (LOCAL)
+ * - DELETE /api/boutique/logo - Supprimer logo (LOCAL)
+ * - PUT /api/boutique/banniere - Upload banniere (LOCAL)
+ * - DELETE /api/boutique/banniere - Supprimer banniere (LOCAL)
+ * 
+ * CLOUDINARY :
+ * - PUT /api/boutique/logo/cloud - Upload logo (CLOUDINARY)
+ * - DELETE /api/boutique/logo/cloud - Supprimer logo (CLOUDINARY)
+ * - PUT /api/boutique/banniere/cloud - Upload banniere (CLOUDINARY)
+ * - DELETE /api/boutique/banniere/cloud - Supprimer banniere (CLOUDINARY)
+ * 
  * @module routes/boutique.routes
  */
 
@@ -21,7 +33,12 @@ const {
     uploadLogo,
     deleteLogo,
     uploadBanniere,
-    deleteBanniere
+    deleteBanniere,
+    // CLOUDINARY
+    uploadLogoCloudinary,
+    deleteLogoCloudinary,
+    uploadBanniereCloudinary,
+    deleteBanniereCloudinary
 } = require('../controllers/boutique.controller');
 
 // Middlewares
@@ -34,8 +51,16 @@ const {
     validateReseauxSociaux
 } = require('../middlewares/boutique.validation');
 
-// Multer pour upload fichiers
+// Multer pour upload fichiers (LOCAL)
 const { uploadLogo: multerLogo, uploadBanniere: multerBanniere } = require('../config/multer');
+
+// ============================================
+// CLOUDINARY - Multer config
+// ============================================
+const { 
+    uploadLogo: multerLogoCloudinary, 
+    uploadBanniere: multerBanniereCloudinary 
+} = require('../config/multer-cloudinary');
 
 // ============================================
 // Appliquer auth + checkRole('BOUTIQUE') a toutes les routes
@@ -69,13 +94,6 @@ router.get('/statut', getStatutValidation);
  * @route   PUT /api/boutique/informations
  * @desc    Modifier les informations de base (nom, description, categorie)
  * @access  Private (BOUTIQUE)
- * 
- * @body    {
- *            nomBoutique: string (optional),
- *            description: string (optional),
- *            categorie: string (optional),
- *            siret: string (optional)
- *          }
  */
 router.put('/informations', validateInformations, updateInformations);
 
@@ -83,13 +101,6 @@ router.put('/informations', validateInformations, updateInformations);
  * @route   PUT /api/boutique/contact
  * @desc    Modifier les informations de contact
  * @access  Private (BOUTIQUE)
- * 
- * @body    {
- *            email: string (optional),
- *            telephone: string (optional),
- *            siteWeb: string (optional),
- *            adresse: { rue, ville, codePostal, pays } (optional)
- *          }
  */
 router.put('/contact', validateContact, updateContact);
 
@@ -97,15 +108,6 @@ router.put('/contact', validateContact, updateContact);
  * @route   PUT /api/boutique/horaires
  * @desc    Modifier les horaires d'ouverture
  * @access  Private (BOUTIQUE)
- * 
- * @body    {
- *            horairesTexte: string (optional, format libre),
- *            horaires: {
- *              lundi: { ouverture: "HH:MM", fermeture: "HH:MM", ferme: boolean },
- *              mardi: { ... },
- *              ...
- *            }
- *          }
  */
 router.put('/horaires', validateHoraires, updateHoraires);
 
@@ -113,27 +115,48 @@ router.put('/horaires', validateHoraires, updateHoraires);
  * @route   PUT /api/boutique/reseaux-sociaux
  * @desc    Modifier les reseaux sociaux
  * @access  Private (BOUTIQUE)
- * 
- * @body    {
- *            reseauxSociaux: {
- *              facebook: string (url, optional),
- *              instagram: string (url, optional),
- *              twitter: string (url, optional),
- *              linkedin: string (url, optional),
- *              tiktok: string (url, optional),
- *              youtube: string (url, optional)
- *            }
- *          }
  */
 router.put('/reseaux-sociaux', validateReseauxSociaux, updateReseauxSociaux);
 
 // ============================================
-// ROUTES IMAGES
+// ROUTES IMAGES - LOCAL
 // ============================================
 
 /**
  * @route   PUT /api/boutique/logo
- * @desc    Upload ou remplacer le logo
+ * @desc    Upload ou remplacer le logo (LOCAL)
+ * @access  Private (BOUTIQUE)
+ */
+router.put('/logo', multerLogo.single('logo'), uploadLogo);
+
+/**
+ * @route   DELETE /api/boutique/logo
+ * @desc    Supprimer le logo (LOCAL)
+ * @access  Private (BOUTIQUE)
+ */
+router.delete('/logo', deleteLogo);
+
+/**
+ * @route   PUT /api/boutique/banniere
+ * @desc    Upload ou remplacer la banniere (LOCAL)
+ * @access  Private (BOUTIQUE)
+ */
+router.put('/banniere', multerBanniere.single('banniere'), uploadBanniere);
+
+/**
+ * @route   DELETE /api/boutique/banniere
+ * @desc    Supprimer la banniere (LOCAL)
+ * @access  Private (BOUTIQUE)
+ */
+router.delete('/banniere', deleteBanniere);
+
+// ============================================
+// CLOUDINARY - ROUTES IMAGES
+// ============================================
+
+/**
+ * @route   PUT /api/boutique/logo/cloud
+ * @desc    Upload ou remplacer le logo (CLOUDINARY)
  * @access  Private (BOUTIQUE)
  * 
  * @header  Content-Type: multipart/form-data
@@ -141,18 +164,18 @@ router.put('/reseaux-sociaux', validateReseauxSociaux, updateReseauxSociaux);
  *          Types acceptes : jpeg, jpg, png, webp
  *          Taille max : 2 MB
  */
-router.put('/logo', multerLogo.single('logo'), uploadLogo);
+router.put('/logo/cloud', multerLogoCloudinary.single('logo'), uploadLogoCloudinary);
 
 /**
- * @route   DELETE /api/boutique/logo
- * @desc    Supprimer le logo
+ * @route   DELETE /api/boutique/logo/cloud
+ * @desc    Supprimer le logo (CLOUDINARY)
  * @access  Private (BOUTIQUE)
  */
-router.delete('/logo', deleteLogo);
+router.delete('/logo/cloud', deleteLogoCloudinary);
 
 /**
- * @route   PUT /api/boutique/banniere
- * @desc    Upload ou remplacer la banniere
+ * @route   PUT /api/boutique/banniere/cloud
+ * @desc    Upload ou remplacer la banniere (CLOUDINARY)
  * @access  Private (BOUTIQUE)
  * 
  * @header  Content-Type: multipart/form-data
@@ -160,13 +183,13 @@ router.delete('/logo', deleteLogo);
  *          Types acceptes : jpeg, jpg, png, webp
  *          Taille max : 5 MB
  */
-router.put('/banniere', multerBanniere.single('banniere'), uploadBanniere);
+router.put('/banniere/cloud', multerBanniereCloudinary.single('banniere'), uploadBanniereCloudinary);
 
 /**
- * @route   DELETE /api/boutique/banniere
- * @desc    Supprimer la banniere
+ * @route   DELETE /api/boutique/banniere/cloud
+ * @desc    Supprimer la banniere (CLOUDINARY)
  * @access  Private (BOUTIQUE)
  */
-router.delete('/banniere', deleteBanniere);
+router.delete('/banniere/cloud', deleteBanniereCloudinary);
 
 module.exports = router;

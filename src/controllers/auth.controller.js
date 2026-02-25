@@ -9,6 +9,8 @@
  * - Gestion avatar (uploadAvatar, deleteAvatar)
  * - Deconnexion (logout)
  * 
+ * CLOUDINARY : uploadAvatarCloudinary, deleteAvatarCloudinary
+ * 
  * @module controllers/auth.controller
  */
 
@@ -17,9 +19,9 @@ const { deleteLocalFile, MAX_FILE_SIZE } = require('../config/multer');
 const multer = require('multer');
 
 // ============================================
-// POUR CLOUDINARY (Decommenter si migration)
+// CLOUDINARY IMPORTS
 // ============================================
-// const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/multer');
+const { deleteFromCloudinary, extractPublicId } = require('../config/multer-cloudinary');
 
 // ============================================
 // CODES D'ERREUR
@@ -287,7 +289,7 @@ const login = async (req, res) => {
         console.error('Erreur login:', error);
         return res.status(500).json({
             success: false,
-            message: 'Erreur interne du serveur lors de la connexion.',
+            message: 'Erreur interne du serveur.',
             error: 'INTERNAL_SERVER_ERROR'
         });
     }
@@ -300,14 +302,21 @@ const login = async (req, res) => {
  */
 const getMe = async (req, res) => {
     try {
-        // L'utilisateur est deja disponible via le middleware auth
-        const user = req.user.toSafeObjectWithAvatarUrl(req);
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(AUTH_ERRORS.USER_NOT_FOUND.statusCode).json({
+                success: false,
+                message: AUTH_ERRORS.USER_NOT_FOUND.message,
+                error: AUTH_ERRORS.USER_NOT_FOUND.code
+            });
+        }
 
         res.status(200).json({
             success: true,
             message: 'Profil recupere avec succes.',
             data: {
-                user
+                user: user.toSafeObjectWithAvatarUrl(req)
             }
         });
 
@@ -322,50 +331,25 @@ const getMe = async (req, res) => {
 };
 
 /**
- * @desc    Mettre a jour le profil de l'utilisateur connecte
+ * @desc    Mettre a jour le profil
  * @route   PUT /api/auth/profile
  * @access  Private
  */
 const updateProfile = async (req, res) => {
     try {
-        // Champs autorises pour la mise a jour
-        const allowedFields = ['nom', 'prenom', 'telephone', 'adresse'];
+        const { nom, prenom, telephone, adresse } = req.body;
 
-        // Construire l'objet de mise a jour
         const updateData = {};
+        if (nom !== undefined) updateData.nom = nom;
+        if (prenom !== undefined) updateData.prenom = prenom;
+        if (telephone !== undefined) updateData.telephone = telephone;
+        if (adresse !== undefined) updateData.adresse = adresse;
 
-        allowedFields.forEach(field => {
-            if (req.body[field] !== undefined) {
-                updateData[field] = req.body[field];
-            }
-        });
-
-        // Verifier qu'il y a des donnees a mettre a jour
-        if (Object.keys(updateData).length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Aucune donnee a mettre a jour.',
-                error: 'NO_UPDATE_DATA'
-            });
-        }
-
-        // Mettre a jour l'utilisateur
         const user = await User.findByIdAndUpdate(
             req.user._id,
-            updateData,
-            {
-                new: true, // Retourner le document mis a jour
-                runValidators: true // Executer les validations
-            }
+            { $set: updateData },
+            { new: true, runValidators: true }
         );
-
-        if (!user) {
-            return res.status(AUTH_ERRORS.USER_NOT_FOUND.statusCode).json({
-                success: false,
-                message: AUTH_ERRORS.USER_NOT_FOUND.message,
-                error: AUTH_ERRORS.USER_NOT_FOUND.code
-            });
-        }
 
         res.status(200).json({
             success: true,
@@ -377,17 +361,6 @@ const updateProfile = async (req, res) => {
 
     } catch (error) {
         console.error('Erreur updateProfile:', error);
-
-        if (error.name === 'ValidationError') {
-            const messages = Object.values(error.errors).map(err => err.message);
-            return res.status(400).json({
-                success: false,
-                message: 'Erreur de validation.',
-                error: 'VALIDATION_ERROR',
-                errors: messages
-            });
-        }
-
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -397,7 +370,7 @@ const updateProfile = async (req, res) => {
 };
 
 /**
- * @desc    Changer le mot de passe de l'utilisateur connecte
+ * @desc    Changer le mot de passe
  * @route   PUT /api/auth/password
  * @access  Private
  */
@@ -405,18 +378,8 @@ const changePassword = async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
 
-        // Recuperer l'utilisateur avec le password
         const user = await User.findById(req.user._id).select('+password');
 
-        if (!user) {
-            return res.status(AUTH_ERRORS.USER_NOT_FOUND.statusCode).json({
-                success: false,
-                message: AUTH_ERRORS.USER_NOT_FOUND.message,
-                error: AUTH_ERRORS.USER_NOT_FOUND.code
-            });
-        }
-
-        // Verifier l'ancien mot de passe
         const isMatch = await user.comparePassword(currentPassword);
 
         if (!isMatch) {
@@ -427,35 +390,16 @@ const changePassword = async (req, res) => {
             });
         }
 
-        // Mettre a jour le mot de passe (sera hashe par le hook pre-save)
         user.password = newPassword;
         await user.save();
 
-        // Generer un nouveau token
-        const token = user.getSignedJwtToken();
-
         res.status(200).json({
             success: true,
-            message: 'Mot de passe modifie avec succes.',
-            token,
-            data: {
-                user: user.toSafeObjectWithAvatarUrl(req)
-            }
+            message: 'Mot de passe change avec succes.'
         });
 
     } catch (error) {
         console.error('Erreur changePassword:', error);
-
-        if (error.name === 'ValidationError') {
-            const messages = Object.values(error.errors).map(err => err.message);
-            return res.status(400).json({
-                success: false,
-                message: 'Erreur de validation.',
-                error: 'VALIDATION_ERROR',
-                errors: messages
-            });
-        }
-
         return res.status(500).json({
             success: false,
             message: 'Erreur interne du serveur.',
@@ -465,24 +409,12 @@ const changePassword = async (req, res) => {
 };
 
 /**
- * @desc    Upload ou remplacer la photo de profil
+ * @desc    Upload photo de profil (LOCAL)
  * @route   PUT /api/auth/avatar
  * @access  Private
  */
 const uploadAvatar = async (req, res) => {
     try {
-        // ========================================
-        // Gestion des erreurs Multer
-        // ========================================
-        if (req.fileValidationError) {
-            return res.status(400).json({
-                success: false,
-                message: req.fileValidationError,
-                error: 'INVALID_FILE_TYPE'
-            });
-        }
-
-        // Verifier qu'un fichier a ete envoye
         if (!req.file) {
             return res.status(AUTH_ERRORS.NO_FILE_UPLOADED.statusCode).json({
                 success: false,
@@ -491,12 +423,9 @@ const uploadAvatar = async (req, res) => {
             });
         }
 
-        // Recuperer l'utilisateur
         const user = await User.findById(req.user._id);
 
         if (!user) {
-            // Supprimer le fichier uploade si user non trouve
-            await deleteLocalFile(`./uploads/avatars/${req.file.filename}`);
             return res.status(AUTH_ERRORS.USER_NOT_FOUND.statusCode).json({
                 success: false,
                 message: AUTH_ERRORS.USER_NOT_FOUND.message,
@@ -508,30 +437,16 @@ const uploadAvatar = async (req, res) => {
         if (user.avatar) {
             try {
                 await deleteLocalFile(`./uploads/avatars/${user.avatar}`);
-
-                // Pour Cloudinary :
-                // const publicId = getPublicIdFromUrl(user.avatar);
-                // await deleteFromCloudinary(publicId);
             } catch (deleteError) {
                 console.error('Erreur suppression ancien avatar:', deleteError);
-                // On continue meme si la suppression echoue
             }
         }
 
-        // Mettre a jour l'avatar dans la base
-        // Stockage local : on stocke le nom du fichier
         user.avatar = req.file.filename;
-
-        // Pour Cloudinary : on stocke l'URL complete
-        // user.avatar = req.file.path;
-
         await user.save({ validateBeforeSave: false });
 
         // Construire l'URL complete pour la reponse
         const avatarUrl = `${req.protocol}://${req.get('host')}/uploads/avatars/${user.avatar}`;
-
-        // Pour Cloudinary : l'URL est deja dans req.file.path
-        // const avatarUrl = req.file.path;
 
         res.status(200).json({
             success: true,
@@ -557,15 +472,6 @@ const uploadAvatar = async (req, res) => {
             }
         }
 
-        if (error.code === 'INVALID_FILE_TYPE') {
-            return res.status(AUTH_ERRORS.INVALID_FILE_TYPE.statusCode).json({
-                success: false,
-                message: AUTH_ERRORS.INVALID_FILE_TYPE.message,
-                error: AUTH_ERRORS.INVALID_FILE_TYPE.code
-            });
-        }
-
-        // Supprimer le fichier uploade en cas d'erreur
         if (req.file) {
             try {
                 await deleteLocalFile(`./uploads/avatars/${req.file.filename}`);
@@ -583,7 +489,7 @@ const uploadAvatar = async (req, res) => {
 };
 
 /**
- * @desc    Supprimer la photo de profil
+ * @desc    Supprimer photo de profil (LOCAL)
  * @route   DELETE /api/auth/avatar
  * @access  Private
  */
@@ -612,10 +518,6 @@ const deleteAvatar = async (req, res) => {
         // Supprimer le fichier physique
         try {
             await deleteLocalFile(`./uploads/avatars/${user.avatar}`);
-
-            // Pour Cloudinary :
-            // const publicId = getPublicIdFromUrl(user.avatar);
-            // await deleteFromCloudinary(publicId);
         } catch (deleteError) {
             console.error('Erreur suppression fichier avatar:', deleteError);
             // On continue meme si la suppression du fichier echoue
@@ -643,8 +545,142 @@ const deleteAvatar = async (req, res) => {
     }
 };
 
+// ============================================
+// CLOUDINARY - AVATAR FUNCTIONS
+// ============================================
+
 /**
- * @desc    Deconnexion de l'utilisateur
+ * @desc    Upload photo de profil (CLOUDINARY)
+ * @route   PUT /api/auth/avatar/cloud
+ * @access  Private
+ */
+const uploadAvatarCloudinary = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(AUTH_ERRORS.NO_FILE_UPLOADED.statusCode).json({
+                success: false,
+                message: AUTH_ERRORS.NO_FILE_UPLOADED.message,
+                error: AUTH_ERRORS.NO_FILE_UPLOADED.code
+            });
+        }
+
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(AUTH_ERRORS.USER_NOT_FOUND.statusCode).json({
+                success: false,
+                message: AUTH_ERRORS.USER_NOT_FOUND.message,
+                error: AUTH_ERRORS.USER_NOT_FOUND.code
+            });
+        }
+
+        // Supprimer l'ancien avatar de Cloudinary s'il existe
+        if (user.avatar && user.avatar.includes('cloudinary.com')) {
+            try {
+                const publicId = extractPublicId(user.avatar);
+                if (publicId) {
+                    await deleteFromCloudinary(publicId);
+                }
+            } catch (deleteError) {
+                console.error('Erreur suppression ancien avatar Cloudinary:', deleteError);
+            }
+        }
+
+        // Avec multer-storage-cloudinary, l'URL est dans req.file.path
+        user.avatar = req.file.path;
+        await user.save({ validateBeforeSave: false });
+
+        res.status(200).json({
+            success: true,
+            message: 'Photo de profil mise a jour avec succes.',
+            data: {
+                avatar: user.avatar,
+                avatarUrl: user.avatar,
+                user: user.toSafeObjectWithAvatarUrl(req)
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur uploadAvatarCloudinary:', error);
+
+        if (error instanceof multer.MulterError) {
+            if (error.code === 'LIMIT_FILE_SIZE') {
+                return res.status(AUTH_ERRORS.FILE_TOO_LARGE.statusCode).json({
+                    success: false,
+                    message: AUTH_ERRORS.FILE_TOO_LARGE.message,
+                    error: AUTH_ERRORS.FILE_TOO_LARGE.code
+                });
+            }
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur lors de l\'upload.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Supprimer photo de profil (CLOUDINARY)
+ * @route   DELETE /api/auth/avatar/cloud
+ * @access  Private
+ */
+const deleteAvatarCloudinary = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(AUTH_ERRORS.USER_NOT_FOUND.statusCode).json({
+                success: false,
+                message: AUTH_ERRORS.USER_NOT_FOUND.message,
+                error: AUTH_ERRORS.USER_NOT_FOUND.code
+            });
+        }
+
+        if (!user.avatar) {
+            return res.status(AUTH_ERRORS.NO_AVATAR.statusCode).json({
+                success: false,
+                message: AUTH_ERRORS.NO_AVATAR.message,
+                error: AUTH_ERRORS.NO_AVATAR.code
+            });
+        }
+
+        // Supprimer de Cloudinary
+        if (user.avatar.includes('cloudinary.com')) {
+            try {
+                const publicId = extractPublicId(user.avatar);
+                if (publicId) {
+                    await deleteFromCloudinary(publicId);
+                }
+            } catch (deleteError) {
+                console.error('Erreur suppression Cloudinary:', deleteError);
+            }
+        }
+
+        user.avatar = null;
+        await user.save({ validateBeforeSave: false });
+
+        res.status(200).json({
+            success: true,
+            message: 'Photo de profil supprimee avec succes.',
+            data: {
+                user: user.toSafeObjectWithAvatarUrl(req)
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur deleteAvatarCloudinary:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erreur interne du serveur.',
+            error: 'INTERNAL_SERVER_ERROR'
+        });
+    }
+};
+
+/**
+ * @desc    Deconnexion
  * @route   POST /api/auth/logout
  * @access  Private
  */
@@ -662,7 +698,6 @@ const logout = async (req, res) => {
             message: 'Deconnexion reussie.',
             data: null
         });
-
     } catch (error) {
         console.error('Erreur logout:', error);
         return res.status(500).json({
@@ -768,5 +803,8 @@ module.exports = {
     deleteAvatar,
     logout,
     updateBoutique,
+    // CLOUDINARY
+    uploadAvatarCloudinary,
+    deleteAvatarCloudinary,
     AUTH_ERRORS
 };

@@ -83,8 +83,8 @@ const BOUTIQUES_DATA = [
             },
             isValidated: true,
             validatedAt: new Date(),
-            note: 4.5,
-            nombreAvis: 12
+            note: 0,
+            nombreAvis: 0
         }
     },
     {
@@ -126,8 +126,8 @@ const BOUTIQUES_DATA = [
             },
             isValidated: true,
             validatedAt: new Date(),
-            note: 4.8,
-            nombreAvis: 25
+            note: 0,
+            nombreAvis: 0
         }
     }
 ];

@@ -5,12 +5,13 @@
  * - Un compte administrateur par defaut
  * - Les categories de produits
  * - Deux boutiques par defaut avec produits
- * - Un client par defaut
+ * - Trois clients par defaut
+ * - Paniers et commandes de simulation
  * 
- * Usage : node scripts/seed.js
- *         node scripts/seed.js --reset (supprime tout avant)
- *         node scripts/seed.js --categories-only (categories seulement)
- *         node scripts/seed.js --full-reset (vide completement la base)
+ * Usage : node scripts/seedTertia.js
+ *         node scripts/seedTertia.js --reset (supprime tout avant)
+ *         node scripts/seedTertia.js --categories-only (categories seulement)
+ *         node scripts/seedTertia.js --full-reset (vide completement la base)
  * 
  * @module seed
  */
@@ -81,6 +82,7 @@ const BOUTIQUES_DATA = [
                 instagram: 'https://instagram.com/technomada',
                 twitter: ''
             },
+            // BOUTIQUE 1 : VALIDEE
             isValidated: true,
             validatedAt: new Date(),
             note: 0,
@@ -124,8 +126,9 @@ const BOUTIQUES_DATA = [
                 instagram: 'https://instagram.com/madastyle.mg',
                 twitter: 'https://twitter.com/madastyle'
             },
-            isValidated: true,
-            validatedAt: new Date(),
+            // BOUTIQUE 2 : EN ATTENTE DE VALIDATION
+            isValidated: false,
+            validatedAt: null,
             note: 0,
             nombreAvis: 0
         }
@@ -133,17 +136,55 @@ const BOUTIQUES_DATA = [
 ];
 
 // ============================================
-// CONFIGURATION CLIENT
+// CONFIGURATION CLIENTS (3 clients)
 // ============================================
-const CLIENT_DATA = {
-    email: 'client@test.com',
-    password: 'Client123!',
-    nom: 'Andriamampianina',
-    prenom: 'Patrick',
-    telephone: '0321234567',
-    role: 'CLIENT',
-    isActive: true
-};
+const CLIENTS_DATA = [
+    {
+        email: 'client@test.com',
+        password: 'Client123!',
+        nom: 'Andriamampianina',
+        prenom: 'Patrick',
+        telephone: '0321234567',
+        role: 'CLIENT',
+        isActive: true,
+        adresse: {
+            rue: '12 Rue Rabearivelo',
+            ville: 'Antananarivo',
+            codePostal: '101',
+            pays: 'Madagascar'
+        }
+    },
+    {
+        email: 'client2@test.com',
+        password: 'Client123!',
+        nom: 'Razafindrabe',
+        prenom: 'Sophie',
+        telephone: '0331122334',
+        role: 'CLIENT',
+        isActive: true,
+        adresse: {
+            rue: '78 Avenue de France',
+            ville: 'Antananarivo',
+            codePostal: '101',
+            pays: 'Madagascar'
+        }
+    },
+    {
+        email: 'client3@test.com',
+        password: 'Client123!',
+        nom: 'Rabemananjara',
+        prenom: 'Hery',
+        telephone: '0345566778',
+        role: 'CLIENT',
+        isActive: true,
+        adresse: {
+            rue: '25 Lot IVG Ambohimanarina',
+            ville: 'Antananarivo',
+            codePostal: '102',
+            pays: 'Madagascar'
+        }
+    }
+];
 
 // ============================================
 // CONFIGURATION CATEGORIES
@@ -227,23 +268,21 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
     };
 
     return [
-        // ========== BOUTIQUE 1 : TechnoMada (Electronique, Telephonie, Informatique) ==========
+        // ========== BOUTIQUE 1 : TechnoMada ==========
         {
             nom: 'Laptop HP ProBook 450 G8',
-            description: 'Ordinateur portable professionnel HP ProBook 450 G8. Processeur Intel Core i5-1135G7, 8Go RAM, SSD 256Go, ecran 15.6 pouces Full HD. Ideal pour le travail et les etudes.',
+            description: 'Ordinateur portable professionnel HP ProBook 450 G8. Processeur Intel Core i5-1135G7, 8Go RAM, SSD 256Go, ecran 15.6 pouces Full HD.',
             prix: 2500000,
             prixPromo: 2299000,
             stock: 15,
             categorie: getCategorieId('Electronique & Informatique'),
             boutique: boutique1Id,
             isActive: true,
-            enPromo: true,
-            dateDebutPromo: new Date(),
-            dateFinPromo: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            enPromo: true
         },
         {
             nom: 'Souris sans fil Logitech M185',
-            description: 'Souris sans fil compacte et fiable. Connexion USB plug-and-play, portee de 10 metres. Autonomie jusqu\'a 12 mois. Compatible Windows, Mac et Chrome OS.',
+            description: 'Souris sans fil compacte et fiable. Connexion USB plug-and-play, portee de 10 metres.',
             prix: 45000,
             stock: 50,
             categorie: getCategorieId('Electronique & Informatique'),
@@ -253,20 +292,18 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Clavier mecanique RGB Gaming',
-            description: 'Clavier mecanique gaming avec retroeclairage RGB personnalisable. Switches Blue, anti-ghosting, repose-poignet magnetique inclus. Parfait pour les gamers exigeants.',
+            description: 'Clavier mecanique gaming avec retroeclairage RGB personnalisable.',
             prix: 185000,
             prixPromo: 159000,
             stock: 25,
             categorie: getCategorieId('Electronique & Informatique'),
             boutique: boutique1Id,
             isActive: true,
-            enPromo: true,
-            dateDebutPromo: new Date(),
-            dateFinPromo: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
+            enPromo: true
         },
         {
             nom: 'Ecran Samsung 24 pouces Full HD',
-            description: 'Moniteur Samsung 24 pouces Full HD 1920x1080. Dalle IPS, temps de reponse 5ms, ports HDMI et VGA. Design elegant avec bordures fines.',
+            description: 'Moniteur Samsung 24 pouces Full HD 1920x1080. Dalle IPS.',
             prix: 520000,
             stock: 12,
             categorie: getCategorieId('Electronique & Informatique'),
@@ -276,7 +313,7 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'iPhone 14 Pro Max 256Go',
-            description: 'Apple iPhone 14 Pro Max avec 256Go de stockage. Puce A16 Bionic, ecran Super Retina XDR 6.7 pouces, camera 48MP. Couleur Violet Intense.',
+            description: 'Apple iPhone 14 Pro Max avec 256Go de stockage. Puce A16 Bionic.',
             prix: 5200000,
             stock: 8,
             categorie: getCategorieId('Telephonie & Accessoires'),
@@ -286,20 +323,18 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Samsung Galaxy A54 5G',
-            description: 'Smartphone Samsung Galaxy A54 5G. Ecran Super AMOLED 6.4 pouces, 128Go stockage, 8Go RAM. Triple camera 50MP. Batterie 5000mAh avec charge rapide.',
+            description: 'Smartphone Samsung Galaxy A54 5G. Ecran Super AMOLED 6.4 pouces.',
             prix: 1450000,
             prixPromo: 1350000,
             stock: 20,
             categorie: getCategorieId('Telephonie & Accessoires'),
             boutique: boutique1Id,
             isActive: true,
-            enPromo: true,
-            dateDebutPromo: new Date(),
-            dateFinPromo: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000)
+            enPromo: true
         },
         {
             nom: 'Ecouteurs Bluetooth JBL Tune 510BT',
-            description: 'Casque sans fil JBL Tune 510BT. Son JBL Pure Bass, autonomie 40 heures, connexion Bluetooth 5.0. Pliable et leger pour un transport facile.',
+            description: 'Casque sans fil JBL Tune 510BT. Son JBL Pure Bass.',
             prix: 125000,
             stock: 35,
             categorie: getCategorieId('Telephonie & Accessoires'),
@@ -309,7 +344,7 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Chargeur rapide USB-C 65W',
-            description: 'Chargeur mural USB-C 65W avec technologie GaN. Compatible avec laptops, tablettes et smartphones. Compact et portable, ideal pour les voyages.',
+            description: 'Chargeur mural USB-C 65W avec technologie GaN.',
             prix: 89000,
             stock: 40,
             categorie: getCategorieId('Telephonie & Accessoires'),
@@ -319,7 +354,7 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Coque iPhone 14 Pro silicone',
-            description: 'Coque de protection en silicone souple pour iPhone 14 Pro. Toucher doux, protection contre les chocs et rayures. Plusieurs coloris disponibles.',
+            description: 'Coque de protection en silicone souple pour iPhone 14 Pro.',
             prix: 25000,
             stock: 100,
             categorie: getCategorieId('Telephonie & Accessoires'),
@@ -329,7 +364,7 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Disque dur externe 1To Seagate',
-            description: 'Disque dur externe portable Seagate 1To. USB 3.0 haute vitesse, compatible Windows et Mac. Design compact et resistant pour transporter vos donnees partout.',
+            description: 'Disque dur externe portable Seagate 1To. USB 3.0 haute vitesse.',
             prix: 195000,
             stock: 30,
             categorie: getCategorieId('Electronique & Informatique'),
@@ -339,7 +374,7 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Webcam Logitech C920 HD Pro',
-            description: 'Webcam Full HD 1080p Logitech C920. Mise au point automatique, correction d\'eclairage HD, deux microphones stereo integres. Parfait pour le teletravail.',
+            description: 'Webcam Full HD 1080p Logitech C920.',
             prix: 280000,
             stock: 18,
             categorie: getCategorieId('Electronique & Informatique'),
@@ -349,22 +384,20 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Routeur WiFi 6 TP-Link AX1500',
-            description: 'Routeur WiFi 6 TP-Link AX1500. Vitesse jusqu\'a 1.5 Gbps, couverture etendue, technologie OFDMA. Configuration facile via application mobile.',
+            description: 'Routeur WiFi 6 TP-Link AX1500. Vitesse jusqu\'a 1.5 Gbps.',
             prix: 175000,
             prixPromo: 149000,
             stock: 22,
             categorie: getCategorieId('Electronique & Informatique'),
             boutique: boutique1Id,
             isActive: true,
-            enPromo: true,
-            dateDebutPromo: new Date(),
-            dateFinPromo: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000)
+            enPromo: true
         },
 
-        // ========== BOUTIQUE 2 : MadaStyle (Mode, Beaute, Maison) ==========
+        // ========== BOUTIQUE 2 : MadaStyle ==========
         {
             nom: 'Robe elegante en soie naturelle',
-            description: 'Magnifique robe en soie sauvage malgache. Coupe fluide et elegante, parfaite pour les occasions speciales. Tailles S a XL disponibles. Couleur bordeaux.',
+            description: 'Magnifique robe en soie sauvage malgache.',
             prix: 285000,
             stock: 15,
             categorie: getCategorieId('Mode & Vetements'),
@@ -374,20 +407,18 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Chemise homme lin premium',
-            description: 'Chemise homme en lin naturel de haute qualite. Coupe slim fit, col italien. Ideale pour un look decontracte chic. Disponible en blanc, bleu ciel et beige.',
+            description: 'Chemise homme en lin naturel de haute qualite.',
             prix: 125000,
             prixPromo: 99000,
             stock: 40,
             categorie: getCategorieId('Mode & Vetements'),
             boutique: boutique2Id,
             isActive: true,
-            enPromo: true,
-            dateDebutPromo: new Date(),
-            dateFinPromo: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+            enPromo: true
         },
         {
             nom: 'Jean slim femme taille haute',
-            description: 'Jean femme coupe slim taille haute. Denim stretch confortable, finition soignee. Parfait pour un look moderne et tendance. Tailles 34 a 44.',
+            description: 'Jean femme coupe slim taille haute. Denim stretch confortable.',
             prix: 89000,
             stock: 60,
             categorie: getCategorieId('Mode & Vetements'),
@@ -397,7 +428,7 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Sac a main cuir veritable',
-            description: 'Sac a main femme en cuir veritable. Design intemporel, compartiments multiples, bandouliere ajustable. Artisanat malgache de qualite.',
+            description: 'Sac a main femme en cuir veritable.',
             prix: 320000,
             stock: 12,
             categorie: getCategorieId('Mode & Vetements'),
@@ -407,20 +438,18 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Baskets sport unisexe',
-            description: 'Baskets sport legeres et confortables. Semelle amortissante, mesh respirant. Parfaites pour le sport ou un usage quotidien. Pointures 36 a 45.',
+            description: 'Baskets sport legeres et confortables.',
             prix: 145000,
             prixPromo: 119000,
             stock: 50,
             categorie: getCategorieId('Mode & Vetements'),
             boutique: boutique2Id,
             isActive: true,
-            enPromo: true,
-            dateDebutPromo: new Date(),
-            dateFinPromo: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            enPromo: true
         },
         {
             nom: 'Coffret parfum Chanel N5',
-            description: 'Coffret cadeau Chanel N5 comprenant eau de parfum 50ml et lait pour le corps 100ml. Le parfum iconique dans un ecrin luxueux.',
+            description: 'Coffret cadeau Chanel N5.',
             prix: 450000,
             stock: 8,
             categorie: getCategorieId('Beaute & Soins'),
@@ -430,7 +459,7 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Creme hydratante visage bio',
-            description: 'Creme hydratante visage aux ingredients naturels et biologiques. Enrichie en aloe vera et huile d\'argan. Convient a tous types de peau.',
+            description: 'Creme hydratante visage aux ingredients naturels.',
             prix: 68000,
             stock: 45,
             categorie: getCategorieId('Beaute & Soins'),
@@ -440,20 +469,18 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Kit maquillage professionnel',
-            description: 'Kit maquillage complet avec palette de fards, mascara, rouge a levres et pinceaux. Couleurs tendance, longue tenue. Trousse de rangement incluse.',
+            description: 'Kit maquillage complet avec palette de fards.',
             prix: 185000,
             prixPromo: 159000,
             stock: 20,
             categorie: getCategorieId('Beaute & Soins'),
             boutique: boutique2Id,
             isActive: true,
-            enPromo: true,
-            dateDebutPromo: new Date(),
-            dateFinPromo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+            enPromo: true
         },
         {
             nom: 'Huile essentielle lavande 30ml',
-            description: 'Huile essentielle de lavande vraie 100% pure et naturelle. Proprietes relaxantes et apaisantes. Utilisable en aromatherapie ou soins de la peau.',
+            description: 'Huile essentielle de lavande vraie 100% pure.',
             prix: 35000,
             stock: 80,
             categorie: getCategorieId('Beaute & Soins'),
@@ -463,7 +490,7 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Lampe de chevet design moderne',
-            description: 'Lampe de chevet au design moderne et epure. Abat-jour en tissu, base en metal brosse. Eclairage doux et chaleureux pour votre chambre.',
+            description: 'Lampe de chevet au design moderne et epure.',
             prix: 95000,
             stock: 25,
             categorie: getCategorieId('Maison & Electromenager'),
@@ -473,20 +500,18 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Parure de lit coton egyptien',
-            description: 'Parure de lit en coton egyptien 400 fils. Comprend housse de couette et deux taies d\'oreiller. Douceur et elegance pour vos nuits.',
+            description: 'Parure de lit en coton egyptien 400 fils.',
             prix: 220000,
             prixPromo: 189000,
             stock: 18,
             categorie: getCategorieId('Maison & Electromenager'),
             boutique: boutique2Id,
             isActive: true,
-            enPromo: true,
-            dateDebutPromo: new Date(),
-            dateFinPromo: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000)
+            enPromo: true
         },
         {
             nom: 'Miroir mural decoratif',
-            description: 'Miroir mural rond avec cadre en rotin naturel. Diametre 60cm. Apporte une touche boheme et naturelle a votre decoration interieure.',
+            description: 'Miroir mural rond avec cadre en rotin naturel.',
             prix: 145000,
             stock: 10,
             categorie: getCategorieId('Maison & Electromenager'),
@@ -496,7 +521,7 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Bougie parfumee artisanale',
-            description: 'Bougie parfumee artisanale a la cire de soja. Parfum vanille et bois de santal. Duree de combustion 45 heures. Fabrication malgache.',
+            description: 'Bougie parfumee artisanale a la cire de soja.',
             prix: 42000,
             stock: 60,
             categorie: getCategorieId('Maison & Electromenager'),
@@ -506,7 +531,7 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Montre homme classique cuir',
-            description: 'Montre homme elegante avec bracelet en cuir veritable. Cadran minimaliste, mouvement quartz japonais. Etanche 30 metres.',
+            description: 'Montre homme elegante avec bracelet en cuir veritable.',
             prix: 195000,
             stock: 15,
             categorie: getCategorieId('Mode & Vetements'),
@@ -516,16 +541,14 @@ const getProduits = (boutique1Id, boutique2Id, categories) => {
         },
         {
             nom: 'Lunettes de soleil polarisees',
-            description: 'Lunettes de soleil unisexe avec verres polarises. Protection UV400. Monture legere et resistante. Style aviateur intemporel.',
+            description: 'Lunettes de soleil unisexe avec verres polarises.',
             prix: 78000,
             prixPromo: 65000,
             stock: 35,
             categorie: getCategorieId('Mode & Vetements'),
             boutique: boutique2Id,
             isActive: true,
-            enPromo: true,
-            dateDebutPromo: new Date(),
-            dateFinPromo: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000)
+            enPromo: true
         }
     ];
 };
@@ -572,8 +595,6 @@ const seedAdmin = async () => {
     console.log(`   | Email    : ${ADMIN_DATA.email}`);
     console.log(`   | Password : ${ADMIN_DATA.password}`);
     console.log('   +---------------------------------------+');
-    console.log('');
-    console.log('   IMPORTANT : Changez ce mot de passe en production !');
 
     return { created: true, admin };
 };
@@ -581,7 +602,7 @@ const seedAdmin = async () => {
 // ============================================
 // FONCTION : Creer les boutiques
 // ============================================
-const seedBoutiques = async () => {
+const seedBoutiques = async (admin) => {
     console.log('\n--- BOUTIQUES ---\n');
     console.log('Creation des boutiques par defaut...');
 
@@ -589,7 +610,8 @@ const seedBoutiques = async () => {
     let created = 0;
     let skipped = 0;
 
-    for (const boutiqueData of BOUTIQUES_DATA) {
+    for (let i = 0; i < BOUTIQUES_DATA.length; i++) {
+        const boutiqueData = JSON.parse(JSON.stringify(BOUTIQUES_DATA[i]));
         const existing = await User.findOne({ email: boutiqueData.email });
 
         if (existing) {
@@ -597,8 +619,13 @@ const seedBoutiques = async () => {
             boutiques.push(existing);
             skipped++;
         } else {
+            if (i === 0 && admin && boutiqueData.boutique.isValidated) {
+                boutiqueData.boutique.validatedBy = admin._id;
+            }
+
             const boutique = await User.create(boutiqueData);
-            console.log(`[CREE]   ${boutiqueData.boutique.nomBoutique} (${boutiqueData.email})`);
+            const status = boutiqueData.boutique.isValidated ? true : false;
+            console.log(`[CREE]   ${boutiqueData.boutique.nomBoutique} (${boutiqueData.email}) - ${status}`);
             boutiques.push(boutique);
             created++;
         }
@@ -606,10 +633,12 @@ const seedBoutiques = async () => {
 
     console.log('');
     console.log('   Informations de connexion boutiques :');
-    console.log('   +-----------------------------------------------+');
-    console.log(`   | Boutique 1 : boutique@test.com / Boutique123! |`);
-    console.log(`   | Boutique 2 : boutique2@test.com / Boutique123!|`);
-    console.log('   +-----------------------------------------------+');
+    console.log('   +--------------------------------------------------+');
+    console.log(`   | Boutique 1 : boutique@test.com / Boutique123!    |`);
+    console.log(`   |              TechnoMada - VALIDEE (true)         |`);
+    console.log(`   | Boutique 2 : boutique2@test.com / Boutique123!   |`);
+    console.log(`   |              MadaStyle - EN ATTENTE  (false)     |`);
+    console.log('   +--------------------------------------------------+');
     console.log('');
     console.log(`Resume: ${created} creee(s), ${skipped} existante(s)`);
 
@@ -617,30 +646,45 @@ const seedBoutiques = async () => {
 };
 
 // ============================================
-// FONCTION : Creer le client
+// FONCTION : Creer les clients
 // ============================================
-const seedClient = async () => {
-    console.log('\n--- CLIENT ---\n');
-    console.log('Creation du client par defaut...');
+const seedClients = async () => {
+    console.log('\n--- CLIENTS ---\n');
+    console.log('Creation des clients par defaut...');
 
-    const existing = await User.findOne({ email: CLIENT_DATA.email });
+    const clients = [];
+    let created = 0;
+    let skipped = 0;
 
-    if (existing) {
-        console.log(`[EXISTE] ${CLIENT_DATA.prenom} ${CLIENT_DATA.nom} (${CLIENT_DATA.email})`);
-        return { created: false, client: existing };
+    for (const clientData of CLIENTS_DATA) {
+        const existing = await User.findOne({ email: clientData.email });
+
+        if (existing) {
+            console.log(`[EXISTE] ${clientData.prenom} ${clientData.nom} (${clientData.email})`);
+            clients.push(existing);
+            skipped++;
+        } else {
+            const client = await User.create(clientData);
+            console.log(`[CREE]   ${clientData.prenom} ${clientData.nom} (${clientData.email})`);
+            clients.push(client);
+            created++;
+        }
     }
 
-    const client = await User.create(CLIENT_DATA);
-
-    console.log(`[CREE]   ${CLIENT_DATA.prenom} ${CLIENT_DATA.nom} (${CLIENT_DATA.email})`);
     console.log('');
-    console.log('   Informations de connexion client :');
-    console.log('   +---------------------------------------+');
-    console.log(`   | Email    : ${CLIENT_DATA.email}`);
-    console.log(`   | Password : ${CLIENT_DATA.password}`);
-    console.log('   +---------------------------------------+');
+    console.log('   Informations de connexion clients :');
+    console.log('   +-----------------------------------------------+');
+    console.log(`   | Client 1 : client@test.com / Client123!      |`);
+    console.log(`   |            Patrick Andriamampianina          |`);
+    console.log(`   | Client 2 : client2@test.com / Client123!     |`);
+    console.log(`   |            Sophie Razafindrabe               |`);
+    console.log(`   | Client 3 : client3@test.com / Client123!     |`);
+    console.log(`   |            Hery Rabemananjara                |`);
+    console.log('   +-----------------------------------------------+');
+    console.log('');
+    console.log(`Resume: ${created} cree(s), ${skipped} existant(s)`);
 
-    return { created: true, client };
+    return clients;
 };
 
 // ============================================
@@ -684,10 +728,11 @@ const seedProduits = async (boutiques, categories) => {
 
     if (boutiques.length < 2) {
         console.log('[ERREUR] Il faut au moins 2 boutiques pour creer les produits');
-        return { created: 0, skipped: 0 };
+        return { created: 0, skipped: 0, produits: [] };
     }
 
     const produitsData = getProduits(boutiques[0]._id, boutiques[1]._id, categories);
+    const produits = [];
 
     let created = 0;
     let skipped = 0;
@@ -698,13 +743,15 @@ const seedProduits = async (boutiques, categories) => {
 
         if (existing) {
             console.log(`[EXISTE] ${produitData.nom}`);
+            produits.push(existing);
             skipped++;
         } else {
-            await Produit.create({
+            const produit = await Produit.create({
                 ...produitData,
                 slug
             });
             console.log(`[CREE]   ${produitData.nom}`);
+            produits.push(produit);
             created++;
         }
     }
@@ -712,7 +759,307 @@ const seedProduits = async (boutiques, categories) => {
     console.log('');
     console.log(`Resume: ${created} cree(s), ${skipped} existant(s)`);
 
-    return { created, skipped };
+    return { created, skipped, produits };
+};
+
+// ============================================
+// FONCTION : Creer les paniers et commandes
+// ============================================
+const seedPaniersEtCommandes = async (clients, boutiques, produits) => {
+    console.log('\n--- PANIERS & COMMANDES ---\n');
+    console.log('Creation des paniers et commandes de simulation...');
+
+    if (clients.length < 3 || produits.length === 0) {
+        console.log('[ERREUR] Il faut 3 clients et des produits pour creer les paniers/commandes');
+        return;
+    }
+
+    // Filtrer les produits par boutique (seulement boutique 1 validee)
+    const produitsBoutique1 = produits.filter(p => p.boutique.toString() === boutiques[0]._id.toString());
+
+    if (produitsBoutique1.length < 12) {
+        console.log('[ERREUR] Pas assez de produits dans la boutique 1');
+        return;
+    }
+
+    // ========== CLIENT 1 : Panier seulement (pas de commande) ==========
+    console.log('\n[CLIENT 1] Patrick - Panier uniquement');
+
+    const existingPanier1 = await Panier.findOne({ client: clients[0]._id });
+    if (!existingPanier1) {
+        const panierItems1 = [
+            {
+                produit: produitsBoutique1[0]._id,
+                quantite: 1,
+                prixUnitaire: produitsBoutique1[0].enPromo ? produitsBoutique1[0].prixPromo : produitsBoutique1[0].prix
+            },
+            {
+                produit: produitsBoutique1[1]._id,
+                quantite: 2,
+                prixUnitaire: produitsBoutique1[1].prix
+            },
+            {
+                produit: produitsBoutique1[6]._id,
+                quantite: 1,
+                prixUnitaire: produitsBoutique1[6].prix
+            }
+        ];
+
+        await Panier.create({
+            client: clients[0]._id,
+            items: panierItems1
+        });
+        console.log('   [CREE] Panier avec 3 articles (Laptop, Souris x2, Ecouteurs)');
+    } else {
+        console.log('   [EXISTE] Panier deja existant');
+    }
+
+    // ========== CLIENT 2 : Commande livree et payee ==========
+    console.log('\n[CLIENT 2] Sophie - Commande livree + payee');
+
+    const existingCommande2 = await Commande.findOne({ client: clients[1]._id });
+    if (!existingCommande2) {
+        // Generer numero manuellement si la methode n'existe pas
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+        const random1 = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+        const numero2 = `CMD-${dateStr}-${random1}`;
+
+        // Items de la commande (structure correcte)
+        const itemsCommande2 = [
+            {
+                produit: produitsBoutique1[4]._id,
+                boutique: boutiques[0]._id,
+                nom: produitsBoutique1[4].nom,
+                slug: generateSlug(produitsBoutique1[4].nom),
+                prix: produitsBoutique1[4].prix,
+                quantite: 1,
+                sousTotal: produitsBoutique1[4].prix
+            },
+            {
+                produit: produitsBoutique1[8]._id,
+                boutique: boutiques[0]._id,
+                nom: produitsBoutique1[8].nom,
+                slug: generateSlug(produitsBoutique1[8].nom),
+                prix: produitsBoutique1[8].prix,
+                quantite: 2,
+                sousTotal: produitsBoutique1[8].prix * 2
+            }
+        ];
+
+        const totalCommande2 = itemsCommande2.reduce((sum, item) => sum + item.sousTotal, 0);
+
+        await Commande.create({
+            numero: numero2,
+            client: clients[1]._id,
+            adresseLivraison: {
+                nom: 'Razafindrabe',
+                prenom: 'Sophie',
+                telephone: '0331122334',
+                rue: '78 Avenue de France',
+                ville: 'Antananarivo',
+                codePostal: '101',
+                pays: 'Madagascar'
+            },
+            items: itemsCommande2,
+            sousTotal: totalCommande2,
+            total: totalCommande2,
+            modePaiement: 'en_ligne',
+            paiementStatut: 'paye',
+            paiementDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+            statut: 'livree',
+            historiqueStatuts: [
+                { statut: 'en_attente', date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+                { statut: 'confirmee', date: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) },
+                { statut: 'en_preparation', date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) },
+                { statut: 'expediee', date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) },
+                { statut: 'en_livraison', date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) },
+                { statut: 'livree', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) }
+            ],
+            parBoutique: [{
+                boutique: boutiques[0]._id,
+                nomBoutique: 'TechnoMada',
+                items: itemsCommande2,
+                sousTotal: totalCommande2,
+                total: totalCommande2,
+                statut: 'livree',
+                historiqueStatuts: [
+                    { statut: 'en_attente', date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+                    { statut: 'livree', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) }
+                ]
+            }]
+        });
+        console.log(`   [CREE] Commande livree: iPhone + 2 Coques = ${totalCommande2.toLocaleString()} Ar`);
+    } else {
+        console.log('   [EXISTE] Commande deja existante');
+    }
+
+    // ========== CLIENT 3 : Commande en cours de livraison ==========
+    console.log('\n[CLIENT 3] Hery - Commande en cours de livraison');
+
+    const existingCommande3 = await Commande.findOne({ client: clients[2]._id });
+    if (!existingCommande3) {
+        const random3 = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+        const today3 = new Date();
+        const dateStr3 = today3.toISOString().slice(0, 10).replace(/-/g, '');
+        const numero3 = `CMD-${dateStr3}-${random3}`;
+
+        const prix5 = produitsBoutique1[5].enPromo ? produitsBoutique1[5].prixPromo : produitsBoutique1[5].prix;
+        const prix2 = produitsBoutique1[2].enPromo ? produitsBoutique1[2].prixPromo : produitsBoutique1[2].prix;
+
+        const itemsCommande3 = [
+            {
+                produit: produitsBoutique1[5]._id,
+                boutique: boutiques[0]._id,
+                nom: produitsBoutique1[5].nom,
+                slug: generateSlug(produitsBoutique1[5].nom),
+                prix: produitsBoutique1[5].prix,
+                prixPromo: produitsBoutique1[5].prixPromo,
+                quantite: 1,
+                sousTotal: prix5
+            },
+            {
+                produit: produitsBoutique1[7]._id,
+                boutique: boutiques[0]._id,
+                nom: produitsBoutique1[7].nom,
+                slug: generateSlug(produitsBoutique1[7].nom),
+                prix: produitsBoutique1[7].prix,
+                quantite: 1,
+                sousTotal: produitsBoutique1[7].prix
+            },
+            {
+                produit: produitsBoutique1[2]._id,
+                boutique: boutiques[0]._id,
+                nom: produitsBoutique1[2].nom,
+                slug: generateSlug(produitsBoutique1[2].nom),
+                prix: produitsBoutique1[2].prix,
+                prixPromo: produitsBoutique1[2].prixPromo,
+                quantite: 1,
+                sousTotal: prix2
+            }
+        ];
+
+        const totalCommande3 = itemsCommande3.reduce((sum, item) => sum + item.sousTotal, 0);
+
+        await Commande.create({
+            numero: numero3,
+            client: clients[2]._id,
+            adresseLivraison: {
+                nom: 'Rabemananjara',
+                prenom: 'Hery',
+                telephone: '0345566778',
+                rue: '25 Lot IVG Ambohimanarina',
+                ville: 'Antananarivo',
+                codePostal: '102',
+                pays: 'Madagascar'
+            },
+            items: itemsCommande3,
+            sousTotal: totalCommande3,
+            total: totalCommande3,
+            modePaiement: 'livraison',
+            paiementStatut: 'en_attente',
+            statut: 'en_livraison',
+            historiqueStatuts: [
+                { statut: 'en_attente', date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+                { statut: 'confirmee', date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) },
+                { statut: 'en_preparation', date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) },
+                { statut: 'expediee', date: new Date(Date.now() - 12 * 60 * 60 * 1000) },
+                { statut: 'en_livraison', date: new Date(Date.now() - 2 * 60 * 60 * 1000) }
+            ],
+            parBoutique: [{
+                boutique: boutiques[0]._id,
+                nomBoutique: 'TechnoMada',
+                items: itemsCommande3,
+                sousTotal: totalCommande3,
+                total: totalCommande3,
+                statut: 'en_livraison',
+                historiqueStatuts: [
+                    { statut: 'en_attente', date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+                    { statut: 'en_livraison', date: new Date(Date.now() - 2 * 60 * 60 * 1000) }
+                ]
+            }]
+        });
+        console.log(`   [CREE] Commande en livraison: Galaxy A54 + Chargeur + Clavier = ${totalCommande3.toLocaleString()} Ar`);
+    } else {
+        console.log('   [EXISTE] Commande deja existante');
+    }
+
+    // ========== 2eme commande pour Client 2 (en attente) ==========
+    console.log('\n[CLIENT 2] Sophie - 2eme commande en attente');
+
+    const existingCommande2b = await Commande.countDocuments({ client: clients[1]._id });
+    if (existingCommande2b < 2) {
+        const random2b = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+        const today2b = new Date();
+        const dateStr2b = today2b.toISOString().slice(0, 10).replace(/-/g, '');
+        const numero2b = `CMD-${dateStr2b}-${random2b}`;
+
+        const itemsCommande2b = [
+            {
+                produit: produitsBoutique1[3]._id,
+                boutique: boutiques[0]._id,
+                nom: produitsBoutique1[3].nom,
+                slug: generateSlug(produitsBoutique1[3].nom),
+                prix: produitsBoutique1[3].prix,
+                quantite: 1,
+                sousTotal: produitsBoutique1[3].prix
+            },
+            {
+                produit: produitsBoutique1[10]._id,
+                boutique: boutiques[0]._id,
+                nom: produitsBoutique1[10].nom,
+                slug: generateSlug(produitsBoutique1[10].nom),
+                prix: produitsBoutique1[10].prix,
+                quantite: 1,
+                sousTotal: produitsBoutique1[10].prix
+            }
+        ];
+
+        const totalCommande2b = itemsCommande2b.reduce((sum, item) => sum + item.sousTotal, 0);
+
+        await Commande.create({
+            numero: numero2b,
+            client: clients[1]._id,
+            adresseLivraison: {
+                nom: 'Razafindrabe',
+                prenom: 'Sophie',
+                telephone: '0331122334',
+                rue: '78 Avenue de France',
+                ville: 'Antananarivo',
+                codePostal: '101',
+                pays: 'Madagascar'
+            },
+            items: itemsCommande2b,
+            sousTotal: totalCommande2b,
+            total: totalCommande2b,
+            modePaiement: 'en_ligne',
+            paiementStatut: 'en_attente',
+            statut: 'en_attente',
+            historiqueStatuts: [
+                { statut: 'en_attente', date: new Date() }
+            ],
+            parBoutique: [{
+                boutique: boutiques[0]._id,
+                nomBoutique: 'TechnoMada',
+                items: itemsCommande2b,
+                sousTotal: totalCommande2b,
+                total: totalCommande2b,
+                statut: 'en_attente',
+                historiqueStatuts: [
+                    { statut: 'en_attente', date: new Date() }
+                ]
+            }]
+        });
+        console.log(`   [CREE] Commande en attente: Ecran + Webcam = ${totalCommande2b.toLocaleString()} Ar`);
+    } else {
+        console.log('   [EXISTE] 2eme commande deja existante');
+    }
+
+    console.log('');
+    console.log('Resume paniers/commandes:');
+    console.log('   Client 1 (Patrick)  : 1 panier actif (pas de commande)');
+    console.log('   Client 2 (Sophie)   : 2 commandes (1 livree/payee, 1 en attente)');
+    console.log('   Client 3 (Hery)     : 1 commande en cours de livraison');
 };
 
 // ============================================
@@ -726,14 +1073,8 @@ const showStats = async () => {
         admins: await User.countDocuments({ role: 'ADMIN' }),
         boutiques: await User.countDocuments({ role: 'BOUTIQUE' }),
         clients: await User.countDocuments({ role: 'CLIENT' }),
-        boutiquesValidees: await User.countDocuments({
-            role: 'BOUTIQUE',
-            'boutique.isValidated': true
-        }),
-        boutiquesEnAttente: await User.countDocuments({
-            role: 'BOUTIQUE',
-            'boutique.isValidated': false
-        })
+        boutiquesValidees: await User.countDocuments({ role: 'BOUTIQUE', 'boutique.isValidated': true }),
+        boutiquesEnAttente: await User.countDocuments({ role: 'BOUTIQUE', 'boutique.isValidated': false })
     };
 
     const categorieStats = {
@@ -748,6 +1089,18 @@ const showStats = async () => {
         enPromo: await Produit.countDocuments({ enPromo: true })
     };
 
+    const panierStats = {
+        total: await Panier.countDocuments(),
+        avecItems: await Panier.countDocuments({ 'items.0': { $exists: true } })
+    };
+
+    const commandeStats = {
+        total: await Commande.countDocuments(),
+        enAttente: await Commande.countDocuments({ statut: 'en_attente' }),
+        enLivraison: await Commande.countDocuments({ statut: 'en_livraison' }),
+        livrees: await Commande.countDocuments({ statut: 'livree' })
+    };
+
     console.log('Utilisateurs :');
     console.log(`   Total                : ${userStats.total}`);
     console.log(`   Administrateurs      : ${userStats.admins}`);
@@ -759,12 +1112,21 @@ const showStats = async () => {
     console.log('Categories :');
     console.log(`   Total                : ${categorieStats.total}`);
     console.log(`   Actives              : ${categorieStats.actives}`);
-    console.log(`   Inactives            : ${categorieStats.inactives}`);
     console.log('');
     console.log('Produits :');
     console.log(`   Total                : ${produitStats.total}`);
     console.log(`   Actifs               : ${produitStats.actifs}`);
     console.log(`   En promotion         : ${produitStats.enPromo}`);
+    console.log('');
+    console.log('Paniers :');
+    console.log(`   Total                : ${panierStats.total}`);
+    console.log(`   Avec articles        : ${panierStats.avecItems}`);
+    console.log('');
+    console.log('Commandes :');
+    console.log(`   Total                : ${commandeStats.total}`);
+    console.log(`   En attente           : ${commandeStats.enAttente}`);
+    console.log(`   En livraison         : ${commandeStats.enLivraison}`);
+    console.log(`   Livrees              : ${commandeStats.livrees}`);
 };
 
 // ============================================
@@ -776,32 +1138,31 @@ const seedDatabase = async (options = {}) => {
         console.log('      SEED DATABASE - CENTRE COMMERCIAL   ');
         console.log('==========================================');
 
-        // Connexion MongoDB
         console.log('\nConnexion a MongoDB...');
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('Connecte a MongoDB');
 
-        // Seed admin (sauf si categories-only)
+        let admin = null;
+        let boutiques = [];
+        let clients = [];
+        let produits = [];
+
         if (!options.categoriesOnly) {
-            await seedAdmin();
+            const adminResult = await seedAdmin();
+            admin = adminResult.admin;
         }
 
-        // Seed categories
         const categories = await seedCategories();
 
-        // Seed boutiques et client (sauf si categories-only)
         if (!options.categoriesOnly) {
-            const boutiques = await seedBoutiques();
-            await seedClient();
-
-            // Seed produits
-            await seedProduits(boutiques, categories);
+            boutiques = await seedBoutiques(admin);
+            clients = await seedClients();
+            const produitsResult = await seedProduits(boutiques, categories);
+            produits = produitsResult.produits;
+            await seedPaniersEtCommandes(clients, boutiques, produits);
         }
 
-        // Afficher les stats
         await showStats();
-
-        // Fermer la connexion
         await mongoose.connection.close();
         console.log('\nConnexion MongoDB fermee.');
 
@@ -815,7 +1176,7 @@ const seedDatabase = async (options = {}) => {
         console.error('\nERREUR lors du seed :', error.message);
 
         if (error.code === 11000) {
-            console.error('   -> Duplication detectee (email ou slug existe deja).');
+            console.error('   -> Duplication detectee.');
         }
 
         if (error.name === 'ValidationError') {
@@ -834,7 +1195,7 @@ const seedDatabase = async (options = {}) => {
 };
 
 // ============================================
-// FONCTION : Reset complet (utilisateurs et categories)
+// FONCTION : Reset
 // ============================================
 const resetDatabase = async () => {
     try {
@@ -844,17 +1205,16 @@ const resetDatabase = async () => {
 
         await mongoose.connect(process.env.MONGODB_URI);
 
+        console.log('Suppression des commandes...');
+        await Commande.deleteMany({});
+        console.log('Suppression des paniers...');
+        await Panier.deleteMany({});
         console.log('Suppression des produits...');
-        const produitsResult = await Produit.deleteMany({});
-        console.log(`   ${produitsResult.deletedCount} produit(s) supprime(s)`);
-
+        await Produit.deleteMany({});
         console.log('Suppression des utilisateurs...');
-        const usersResult = await User.deleteMany({});
-        console.log(`   ${usersResult.deletedCount} utilisateur(s) supprime(s)`);
-
+        await User.deleteMany({});
         console.log('Suppression des categories...');
-        const categoriesResult = await Categorie.deleteMany({});
-        console.log(`   ${categoriesResult.deletedCount} categorie(s) supprimee(s)`);
+        await Categorie.deleteMany({});
 
         await mongoose.connection.close();
         console.log('\nReset termine.');
@@ -866,7 +1226,7 @@ const resetDatabase = async () => {
 };
 
 // ============================================
-// FONCTION : Reset complet de TOUTE la base
+// FONCTION : Full Reset
 // ============================================
 const fullResetDatabase = async () => {
     try {
@@ -876,53 +1236,19 @@ const fullResetDatabase = async () => {
 
         await mongoose.connect(process.env.MONGODB_URI);
 
-        console.log('Suppression de toutes les collections...\n');
-
-        // Supprimer toutes les collections
-        console.log('Suppression des messages...');
-        const messagesResult = await Message.deleteMany({});
-        console.log(`   ${messagesResult.deletedCount} message(s) supprime(s)`);
-
-        console.log('Suppression des conversations...');
-        const conversationsResult = await Conversation.deleteMany({});
-        console.log(`   ${conversationsResult.deletedCount} conversation(s) supprimee(s)`);
-
-        console.log('Suppression des notifications...');
-        const notificationsResult = await Notification.deleteMany({});
-        console.log(`   ${notificationsResult.deletedCount} notification(s) supprimee(s)`);
-
-        console.log('Suppression des avis...');
-        const avisResult = await Avis.deleteMany({});
-        console.log(`   ${avisResult.deletedCount} avis supprime(s)`);
-
-        console.log('Suppression des commandes...');
-        const commandesResult = await Commande.deleteMany({});
-        console.log(`   ${commandesResult.deletedCount} commande(s) supprimee(s)`);
-
-        console.log('Suppression des paniers...');
-        const paniersResult = await Panier.deleteMany({});
-        console.log(`   ${paniersResult.deletedCount} panier(s) supprime(s)`);
-
-        console.log('Suppression des produits...');
-        const produitsResult = await Produit.deleteMany({});
-        console.log(`   ${produitsResult.deletedCount} produit(s) supprime(s)`);
-
-        console.log('Suppression des categories...');
-        const categoriesResult = await Categorie.deleteMany({});
-        console.log(`   ${categoriesResult.deletedCount} categorie(s) supprimee(s)`);
-
-        console.log('Suppression de l\'historique de recherche...');
-        const searchResult = await SearchHistory.deleteMany({});
-        console.log(`   ${searchResult.deletedCount} recherche(s) supprimee(s)`);
-
-        console.log('Suppression des utilisateurs...');
-        const usersResult = await User.deleteMany({});
-        console.log(`   ${usersResult.deletedCount} utilisateur(s) supprime(s)`);
+        await Message.deleteMany({});
+        await Conversation.deleteMany({});
+        await Notification.deleteMany({});
+        await Avis.deleteMany({});
+        await Commande.deleteMany({});
+        await Panier.deleteMany({});
+        await Produit.deleteMany({});
+        await Categorie.deleteMany({});
+        await SearchHistory.deleteMany({});
+        await User.deleteMany({});
 
         await mongoose.connection.close();
-        console.log('\n==========================================');
-        console.log('       BASE DE DONNEES VIDEE AVEC SUCCES  ');
-        console.log('==========================================\n');
+        console.log('\nBase de donnees videe.');
 
     } catch (error) {
         console.error('Erreur lors du full reset :', error.message);
@@ -939,7 +1265,6 @@ const fullResetDatabase = async () => {
 const args = process.argv.slice(2);
 
 if (args.includes('--full-reset')) {
-    console.log('\nMode FULL RESET active - Suppression de TOUTES les donnees\n');
     fullResetDatabase().then(() => {
         if (!args.includes('--no-seed')) {
             seedDatabase();
@@ -948,10 +1273,8 @@ if (args.includes('--full-reset')) {
         }
     });
 } else if (args.includes('--reset')) {
-    console.log('\nMode RESET active\n');
     resetDatabase().then(() => seedDatabase());
 } else if (args.includes('--categories-only')) {
-    console.log('\nMode CATEGORIES ONLY active\n');
     seedDatabase({ categoriesOnly: true });
 } else {
     seedDatabase();

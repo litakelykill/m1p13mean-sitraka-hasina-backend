@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const connectDB = require('./config/database');
 require('dotenv').config();
 
 const app = express();
@@ -48,15 +49,33 @@ app.use(cors(corsOptions));
 app.use((req, res, next) => {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] ${req.method} ${req.url}`);
-
-    // Ajout de propriété personnalisée
     req.requestTime = Date.now();
-
     next();
 });
 
 // Middleware pour servir les fichiers statiques (uploads)
 app.use('/uploads', express.static('uploads'));
+
+// -----------------------------------------------------------------------------
+// MIDDLEWARE DB — CRITIQUE POUR VERCEL (serverless)
+// Sur Vercel, server.js ne tourne pas en continu : la connexion DB doit être
+// établie (ou réutilisée via le cache) à chaque requête entrante.
+// Grâce au cache global dans database.js, aucune nouvelle connexion n'est
+// créée si une connexion active existe déjà.
+// -----------------------------------------------------------------------------
+app.use(async (req, res, next) => {
+    try {
+        await connectDB();
+        next();
+    } catch (err) {
+        console.error('DB connection failed on request:', err.message);
+        return res.status(503).json({
+            success: false,
+            message: 'Service temporairement indisponible, veuillez réessayer',
+            error: 'DB_CONNECTION_ERROR'
+        });
+    }
+});
 
 // ROUTE DE TEST (Health Check)
 app.get('/', (req, res) => {

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schéma MongoDB — Centre Commercial</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --border: #1e2330;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --accent3: #7c3aed;
+    --accent4: #10b981;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --line: rgba(0,229,255,0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* HEADER */
+  header {
+    padding: 2.5rem 3rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 1.5rem;
+    position: relative;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, var(--accent), transparent 60%);
+  }
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+  header h1 span { color: var(--accent); }
+  .badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 2px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .stats-bar {
+    margin-left: auto;
+    display: flex;
+    gap: 2rem;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .stats-bar strong { color: var(--accent); font-size: 1.1rem; }
+
+  /* LEGEND */
+  .legend {
+    display: flex;
+    gap: 1.5rem;
+    padding: 0.8rem 3rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.68rem;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* CANVAS */
+  .canvas {
+    position: relative;
+    width: 100%;
+    overflow: auto;
+  }
+
+  svg#diagram {
+    display: block;
+    width: 1400px;
+    height: 920px;
+  }
+
+  /* NODES */
+  .node { cursor: pointer; }
+  .node rect {
+    transition: filter 0.2s;
+  }
+  .node:hover rect { filter: brightness(1.3); }
+  .node-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    fill: #fff;
+  }
+  .node-field {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    fill: #94a3b8;
+  }
+  .node-field.required { fill: #e2e8f0; }
+  .node-field.ref { fill: #67e8f9; }
+  .node-field.type-key { fill: #fbbf24; }
+  .node-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    fill: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* EDGES */
+  .edge {
+    fill: none;
+    stroke-width: 1.5;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+  }
+  .edge:hover { opacity: 1; }
+
+  /* TOOLTIP */
+  #tooltip {
+    position: fixed;
+    background: #1e2330;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 0.6rem 1rem;
+    font-size: 0.7rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 100;
+    max-width: 220px;
+    line-height: 1.6;
+  }
+  #tooltip strong { color: var(--accent); display: block; margin-bottom: 0.2rem; }
+
+  /* INFO PANEL */
+  #info-panel {
+    position: fixed;
+    right: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    width: 240px;
+    font-size: 0.7rem;
+    color: var(--muted);
+    line-height: 1.8;
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+  #info-panel.visible { opacity: 1; }
+  #info-panel h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    color: #fff;
+    margin-bottom: 0.5rem;
+  }
+  #info-panel .field-list { margin-top: 0.5rem; }
+  #info-panel .field-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.15rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  #info-panel .field-name { color: var(--text); }
+  #info-panel .field-type { color: var(--accent); font-size: 0.65rem; }
+  #info-panel .close-btn {
+    position: absolute; top: 0.6rem; right: 0.8rem;
+    cursor: pointer; color: var(--muted); font-size: 1rem;
+    background: none; border: none; color: var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Schéma <span>MongoDB</span></h1>
+  <span class="badge">10 collections</span>
+  <div class="stats-bar">
+    <div><strong>10</strong><br>Collections</div>
+    <div><strong>18</strong><br>Relations</div>
+    <div><strong>4</strong><br>Index TTL</div>
+  </div>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><div class="dot" style="background:#00e5ff"></div> Référence (ObjectId)</div>
+  <div class="legend-item"><div class="dot" style="background:#ff6b35"></div> Collection principale</div>
+  <div class="legend-item"><div class="dot" style="background:#7c3aed"></div> Sous-document embarqué</div>
+  <div class="legend-item"><div class="dot" style="background:#10b981"></div> TTL / expiration auto</div>
+  <div class="legend-item" style="color:#67e8f9">━ champ ref (bleu) = ObjectId vers une autre collection</div>
+</div>
+
+<div class="canvas">
+  <svg id="diagram" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<div id="tooltip"></div>
+<div id="info-panel">
+  <button class="close-btn" onclick="closePanel()">✕</button>
+  <h3 id="panel-title"></h3>
+  <div id="panel-desc" style="margin-bottom:0.5rem;"></div>
+  <div class="field-list" id="panel-fields"></div>
+</div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+
+const collections = [
+  {
+    id: 'users',
+    label: 'users',
+    color: '#ff6b35',
+    x: 560, y: 30,
+    desc: 'Utilisateurs (ADMIN, BOUTIQUE, CLIENT). Embarque le sous-document boutique pour les vendeurs.',
+    fields: [
+      { name: '_id', type: 'ObjectId', req: true, key: true },
+      { name: 'email', type: 'String', req: true },
+      { name: 'password', type: 'String (hash)', req: true },
+      { name: 'nom / prenom', type: 'String', req: true },
+      { name: 'role', type: 'ADMIN|BOUTIQUE|CLIENT' },
+      { name: 'isActive', type: 'Boolean' },
+      { name: 'boutique', type: 'Subdoc (si BOUTIQUE)', subdoc: true },
+      { name: 'avatar', type: 'String (fichier)' },
+      { name: 'lastLogin / loginCount', type: 'Date / Number' },
+    ]
+  },
+  {
+    id: 'produits',
+    label: 'produits',
+    color: '#0ea5e9',
+    x: 50, y: 220,
+    desc: 'Produits des boutiques. Slug généré auto avec timestamp. Promo désactivée si prixPromo >= prix.',
+    fields: [
+      { name: '_id', type: 'ObjectId', key: true },
+      { name: 'nom / slug', type: 'String' },
+      { name: 'prix / prixPromo', type: 'Number' },
+      { name: 'enPromo', type: 'Boolean' },
+      { name: 'stock / seuilAlerte', type: 'Number' },
+      { name: 'boutique', type: 'ref: users', ref: true },
+      { name: 'categorie', type: 'ref: categories', ref: true },
+      { name: 'isActive', type: 'Boolean' },
+      { name: 'vues', type: 'Number' },
+    ]
+  },
+  {
+    id: 'categories',
+    label: 'categories',
+    color: '#a78bfa',
+    x: 50, y: 530,
+    desc: 'Catégories de produits. Slug généré depuis le nom. Virtual produitsCount via populate.',
+    fields: [
+      { name: '_id', type: 'ObjectId', key: true },
+      { name: 'nom', type: 'String (unique)' },
+      { name: 'slug', type: 'String (unique)' },
+      { name: 'description', type: 'String' },
+      { name: 'ordre', type: 'Number' },
+      { name: 'isActive', type: 'Boolean' },
+    ]
+  },
+  {
+    id: 'commandes',
+    label: 'commandes',
+    color: '#f59e0b',
+    x: 560, y: 300,
+    desc: 'Commandes multi-boutiques. Contient parBoutique[] (sous-commandes) avec leur propre statut et historique.',
+    fields: [
+      { name: '_id', type: 'ObjectId', key: true },
+      { name: 'numero', type: 'String (unique)' },
+      { name: 'client', type: 'ref: users', ref: true },
+      { name: 'adresseLivraison', type: 'Subdoc', subdoc: true },
+      { name: 'items[]', type: 'Subdoc[]' },
+      { name: 'statut', type: 'Enum 8 valeurs' },
+      { name: 'paiementStatut', type: 'Enum' },
+      { name: 'parBoutique[]', type: 'Sous-commandes[]', subdoc: true },
+    ]
+  },
+  {
+    id: 'paniers',
+    label: 'paniers',
+    color: '#10b981',
+    x: 50, y: 740,
+    desc: '1 panier par client (unique). Items avec snapshot du prix au moment de l\'ajout.',
+    fields: [
+      { name: '_id', type: 'ObjectId', key: true },
+      { name: 'client', type: 'ref: users (unique)', ref: true },
+      { name: 'items[].produit', type: 'ref: produits', ref: true },
+      { name: 'items[].quantite', type: 'Number' },
+      { name: 'items[].prixUnitaire', type: 'Number' },
+      { name: 'items[].prixPromo', type: 'Number' },
+    ]
+  },
+  {
+    id: 'avis',
+    label: 'avis',
+    color: '#f472b6',
+    x: 1080, y: 30,
+    desc: '1 avis max par client/boutique (index unique). Mise à jour automatique de boutique.note via post-save hook.',
+    fields: [
+      { name: '_id', type: 'ObjectId', key: true },
+      { name: 'client', type: 'ref: users', ref: true },
+      { name: 'boutique', type: 'ref: users', ref: true },
+      { name: 'commande', type: 'ref: commandes', ref: true },
+      { name: 'note', type: 'Number (1-5)' },
+      { name: 'commentaire', type: 'String' },
+      { name: 'reponse', type: 'Subdoc {contenu, date}', subdoc: true },
+      { name: 'statut', type: 'approuve|signale|...' },
+      { name: 'marqueUtilePar[]', type: 'ref: users[]', ref: true },
+    ]
+  },
+  {
+    id: 'conversations',
+    label: 'conversations',
+    color: '#06b6d4',
+    x: 1080, y: 310,
+    desc: 'Canal de messagerie client↔boutique. Peut être lié à une commande. Index unique partiel sur (client,boutique) sans commande.',
+    fields: [
+      { name: '_id', type: 'ObjectId', key: true },
+      { name: 'client', type: 'ref: users', ref: true },
+      { name: 'boutique', type: 'ref: users', ref: true },
+      { name: 'commande', type: 'ref: commandes', ref: true },
+      { name: 'lastMessage', type: 'Subdoc aperçu', subdoc: true },
+      { name: 'clientUnreadCount', type: 'Number' },
+      { name: 'boutiqueUnreadCount', type: 'Number' },
+      { name: 'isActive', type: 'Boolean' },
+    ]
+  },
+  {
+    id: 'messages',
+    label: 'messages',
+    color: '#818cf8',
+    x: 1080, y: 590,
+    desc: 'Messages chiffrés AES-256-GCM. Le contenu est un virtual déchiffré à la volée, jamais stocké en clair.',
+    fields: [
+      { name: '_id', type: 'ObjectId', key: true },
+      { name: 'conversation', type: 'ref: conversations', ref: true },
+      { name: 'sender', type: 'ref: users', ref: true },
+      { name: 'senderRole', type: 'CLIENT|BOUTIQUE' },
+      { name: 'encryptedContent', type: 'String (AES-GCM)' },
+      { name: 'iv / authTag', type: 'String' },
+      { name: 'isRead / readAt', type: 'Boolean / Date' },
+      { name: 'isDeleted', type: 'Boolean (soft delete)' },
+    ]
+  },
+  {
+    id: 'notifications',
+    label: 'notifications',
+    color: '#fb923c',
+    x: 560, y: 700,
+    desc: 'Notifications utilisateurs. TTL automatique via expireLe. Soft delete via supprime:true.',
+    fields: [
+      { name: '_id', type: 'ObjectId', key: true },
+      { name: 'destinataire', type: 'ref: users', ref: true },
+      { name: 'type', type: 'Enum 18 types' },
+      { name: 'titre / message', type: 'String' },
+      { name: 'metadata.entiteId', type: 'ObjectId (polymorphe)' },
+      { name: 'lu / luLe', type: 'Boolean / Date' },
+      { name: 'expireLe', type: 'Date (TTL)', ttl: true },
+      { name: 'supprime', type: 'Boolean' },
+    ]
+  },
+  {
+    id: 'searchhistories',
+    label: 'searchhistories',
+    color: '#34d399',
+    x: 50, y: 30,
+    desc: 'Historique de recherche. TTL partiel : recherches anonymes supprimées après 30 jours. queryNormalized = sans accents.',
+    fields: [
+      { name: '_id', type: 'ObjectId', key: true },
+      { name: 'user', type: 'ref: users (nullable)', ref: true },
+      { name: 'query', type: 'String' },
+      { name: 'queryNormalized', type: 'String (auto)' },
+      { name: 'type', type: 'all|produits|boutiques' },
+      { name: 'filtres', type: 'Subdoc', subdoc: true },
+      { name: 'resultats', type: '{totalProduits, totalBoutiques}' },
+      { name: 'createdAt', type: 'TTL (30j si user=null)', ttl: true },
+    ]
+  },
+];
+
+// Edges: [from, to, label, color]
+const edges = [
+  ['produits', 'users', 'boutique', '#0ea5e9'],
+  ['produits', 'categories', 'categorie', '#a78bfa'],
+  ['paniers', 'users', 'client', '#10b981'],
+  ['paniers', 'produits', 'items[].produit', '#10b981'],
+  ['commandes', 'users', 'client', '#f59e0b'],
+  ['avis', 'users', 'client / boutique', '#f472b6'],
+  ['avis', 'commandes', 'commande', '#f472b6'],
+  ['conversations', 'users', 'client / boutique', '#06b6d4'],
+  ['conversations', 'commandes', 'commande', '#06b6d4'],
+  ['messages', 'conversations', 'conversation', '#818cf8'],
+  ['messages', 'users', 'sender', '#818cf8'],
+  ['notifications', 'users', 'destinataire', '#fb923c'],
+  ['searchhistories', 'users', 'user', '#34d399'],
+];
+
+// ─── RENDER ─────────────────────────────────────────────────────────────────
+
+const svg = document.getElementById('diagram');
+const NS = 'http://www.w3.org/2000/svg';
+
+function el(tag, attrs = {}) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+
+function txt(content, attrs = {}) {
+  const t = el('text', attrs);
+  t.textContent = content;
+  return t;
+}
+
+// Background grid
+const defs = el('defs');
+const pattern = el('pattern', { id: 'grid', width: '40', height: '40', patternUnits: 'userSpaceOnUse' });
+const gridLine1 = el('path', { d: 'M 40 0 L 0 0 0 40', fill: 'none', stroke: '#1a1f2e', 'stroke-width': '0.5' });
+pattern.appendChild(gridLine1);
+defs.appendChild(pattern);
+
+// Arrow markers
+edges.forEach((e, i) => {
+  const marker = el('marker', {
+    id: `arrow-${i}`, markerWidth: '8', markerHeight: '8',
+    refX: '6', refY: '3', orient: 'auto'
+  });
+  const poly = el('path', { d: 'M0,0 L0,6 L8,3 z', fill: e[3] });
+  marker.appendChild(poly);
+  defs.appendChild(marker);
+});
+
+svg.appendChild(defs);
+
+// BG rect
+const bgRect = el('rect', { width: '1400', height: '920', fill: '#0a0c10' });
+svg.appendChild(bgRect);
+const bgGrid = el('rect', { width: '1400', height: '920', fill: 'url(#grid)' });
+svg.appendChild(bgGrid);
+
+// Node dimensions
+const NODE_W = 220;
+const NODE_HEADER = 36;
+const FIELD_H = 16;
+const NODE_PAD = 8;
+
+function getNodeHeight(col) {
+  return NODE_HEADER + NODE_PAD + col.fields.length * FIELD_H + NODE_PAD;
+}
+
+function getNodeCenter(col) {
+  return {
+    x: col.x + NODE_W / 2,
+    y: col.y + getNodeHeight(col) / 2
+  };
+}
+
+// ─── DRAW EDGES ─────────────────────────────────────────────────────────────
+const edgesGroup = el('g', { id: 'edges' });
+
+edges.forEach((edge, i) => {
+  const from = collections.find(c => c.id === edge[0]);
+  const to = collections.find(c => c.id === edge[1]);
+  if (!from || !to) return;
+
+  const fc = getNodeCenter(from);
+  const tc = getNodeCenter(to);
+
+  // Simple curved path
+  const dx = tc.x - fc.x;
+  const dy = tc.y - fc.y;
+  const cx1 = fc.x + dx * 0.4;
+  const cy1 = fc.y;
+  const cx2 = tc.x - dx * 0.4;
+  const cy2 = tc.y;
+
+  const path = el('path', {
+    d: `M ${fc.x} ${fc.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${tc.x} ${tc.y}`,
+    class: 'edge',
+    stroke: edge[3],
+    'marker-end': `url(#arrow-${i})`
+  });
+
+  // Label on edge midpoint
+  const lx = (fc.x + tc.x) / 2;
+  const ly = (fc.y + tc.y) / 2 - 6;
+
+  const label = txt(edge[2], {
+    x: lx, y: ly,
+    'text-anchor': 'middle',
+    'font-family': 'JetBrains Mono, monospace',
+    'font-size': '8',
+    fill: edge[3],
+    opacity: '0.75'
+  });
+
+  edgesGroup.appendChild(path);
+  edgesGroup.appendChild(label);
+});
+
+svg.appendChild(edgesGroup);
+
+// ─── DRAW NODES ─────────────────────────────────────────────────────────────
+const nodesGroup = el('g', { id: 'nodes' });
+
+collections.forEach(col => {
+  const h = getNodeHeight(col);
+  const g = el('g', { class: 'node', id: `node-${col.id}`, transform: `translate(${col.x}, ${col.y})` });
+
+  // Shadow
+  const shadow = el('rect', {
+    x: '4', y: '4', width: NODE_W, height: h,
+    rx: '6', fill: col.color, opacity: '0.12'
+  });
+  g.appendChild(shadow);
+
+  // Main rect
+  const rect = el('rect', {
+    width: NODE_W, height: h,
+    rx: '6',
+    fill: '#111318',
+    stroke: col.color,
+    'stroke-width': '1.5'
+  });
+  g.appendChild(rect);
+
+  // Header bg
+  const headerBg = el('rect', {
+    width: NODE_W, height: NODE_HEADER,
+    rx: '6',
+    fill: col.color,
+    opacity: '0.18'
+  });
+  g.appendChild(headerBg);
+
+  // Color bar left
+  const bar = el('rect', {
+    x: '0', y: '0', width: '4', height: h,
+    rx: '2', fill: col.color
+  });
+  g.appendChild(bar);
+
+  // Collection name
+  const title = txt(col.label, {
+    x: '14', y: '23',
+    class: 'node-title'
+  });
+  g.appendChild(title);
+
+  // Field count badge
+  const countBadge = txt(`${col.fields.length} champs`, {
+    x: NODE_W - 8, y: '23',
+    'text-anchor': 'end',
+    'font-family': 'JetBrains Mono, monospace',
+    'font-size': '8',
+    fill: col.color,
+    opacity: '0.8'
+  });
+  g.appendChild(countBadge);
+
+  // Separator line
+  const sep = el('line', {
+    x1: '0', y1: NODE_HEADER, x2: NODE_W, y2: NODE_HEADER,
+    stroke: col.color, 'stroke-width': '0.5', opacity: '0.4'
+  });
+  g.appendChild(sep);
+
+  // Fields
+  col.fields.forEach((field, idx) => {
+    const fy = NODE_HEADER + NODE_PAD + idx * FIELD_H + 10;
+
+    // Field bullet
+    const bullet = el('circle', {
+      cx: '12', cy: fy - 3.5,
+      r: '2',
+      fill: field.ref ? '#67e8f9' : field.key ? '#fbbf24' : field.ttl ? '#10b981' : '#475569'
+    });
+    g.appendChild(bullet);
+
+    // Field name
+    const fname = txt(field.name, {
+      x: '20', y: fy,
+      class: `node-field${field.req ? ' required' : ''}${field.ref ? ' ref' : ''}${field.key ? ' type-key' : ''}`
+    });
+    g.appendChild(fname);
+
+    // Field type (right aligned, truncated)
+    const displayType = field.type.length > 18 ? field.type.slice(0, 17) + '…' : field.type;
+    const ftype = txt(displayType, {
+      x: NODE_W - 8, y: fy,
+      'text-anchor': 'end',
+      'font-family': 'JetBrains Mono, monospace',
+      'font-size': '8',
+      fill: field.ref ? '#67e8f9' : field.subdoc ? '#c084fc' : field.ttl ? '#10b981' : '#475569'
+    });
+    g.appendChild(ftype);
+  });
+
+  // Interactivity
+  g.addEventListener('click', () => openPanel(col));
+  g.addEventListener('mouseenter', (e) => showTooltip(e, col));
+  g.addEventListener('mousemove', (e) => moveTooltip(e));
+  g.addEventListener('mouseleave', hideTooltip);
+
+  nodesGroup.appendChild(g);
+});
+
+svg.appendChild(nodesGroup);
+
+// ─── TOOLTIP ────────────────────────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(e, col) {
+  tooltip.innerHTML = `<strong>${col.label}</strong>${col.desc}`;
+  tooltip.style.opacity = '1';
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  tooltip.style.left = (e.clientX + 14) + 'px';
+  tooltip.style.top = (e.clientY - 10) + 'px';
+}
+function hideTooltip() { tooltip.style.opacity = '0'; }
+
+// ─── INFO PANEL ─────────────────────────────────────────────────────────────
+const panel = document.getElementById('info-panel');
+
+function openPanel(col) {
+  document.getElementById('panel-title').textContent = col.label;
+  document.getElementById('panel-desc').textContent = col.desc;
+
+  const fieldsEl = document.getElementById('panel-fields');
+  fieldsEl.innerHTML = col.fields.map(f => `
+    <div class="field-item">
+      <span class="field-name">${f.name}</span>
+      <span class="field-type">${f.type}</span>
+    </div>
+  `).join('');
+
+  panel.classList.add('visible');
+}
+
+function closePanel() { panel.classList.remove('visible'); }
+
+// Highlight connected edges on hover
+document.querySelectorAll('.node').forEach(nodeEl => {
+  const id = nodeEl.id.replace('node-', '');
+  nodeEl.addEventListener('mouseenter', () => {
+    document.querySelectorAll('.edge').forEach(e => e.style.opacity = '0.1');
+    // re-highlight connected
+  });
+  nodeEl.addEventListener('mouseleave', () => {
+    document.querySelectorAll('.edge').forEach(e => e.style.opacity = '0.5');
+  });
+});
+</script>
+</body>
+</html>
